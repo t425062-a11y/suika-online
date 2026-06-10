@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>オンライン対戦</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#f7d98c;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+#container{
+    display:flex;
+    gap:30px;
+}
+
+canvas{
+    background:white;
+    border:5px solid black;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="container">
+
+    <div>
+        <h2>自分</h2>
+        <canvas id="myCanvas"
+                width="400"
+                height="600"></canvas>
+    </div>
+
+    <div>
+        <h2>相手</h2>
+        <canvas id="enemyCanvas"
+                width="400"
+                height="600"></canvas>
+    </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+const socket = io();
+
+const myCanvas =
+    document.getElementById("myCanvas");
+
+const myCtx =
+    myCanvas.getContext("2d");
+
+const enemyCanvas =
+    document.getElementById("enemyCanvas");
+
+const enemyCtx =
+    enemyCanvas.getContext("2d");
+
+const gravity = 0.35;
+
+const fruits = [
+    { r:20, color:"red" },
+    { r:30, color:"orange" },
+    { r:40, color:"yellow" },
+    { r:50, color:"green" }
+];
+
+class Fruit{
+
+    constructor(x,y,type){
+
+        this.x = x;
+        this.y = y;
+
+        this.type = type;
+
+        this.radius = fruits[type].r;
+
+        this.color = fruits[type].color;
+
+        this.vy = 0;
+    }
+
+    update(){
+
+        this.vy += gravity;
+
+        this.y += this.vy;
+
+        if(
+            this.y + this.radius >
+            myCanvas.height
+        ){
+
+            this.y =
+                myCanvas.height -
+                this.radius;
+
+            this.vy *= -0.2;
+        }
+    }
+
+    draw(ctx){
+
+        ctx.beginPath();
+
+        ctx.fillStyle = this.color;
+
+        ctx.arc(
+            this.x,
+            this.y,
+            this.radius,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+    }
+}
+
+let fruitList = [];
+
+let enemyFruitList = [];
+
+myCanvas.addEventListener(
+    "click",
+    (e)=>{
+
+    const rect =
+        myCanvas.getBoundingClientRect();
+
+    const x =
+        e.clientX - rect.left;
+
+    const type =
+        Math.floor(Math.random() * 4);
+
+    const fruit =
+        new Fruit(x,50,type);
+
+    fruitList.push(fruit);
+});
+
+// 自分状態送信
+function sendState(){
+
+    const data =
+        fruitList.map(f=>({
+
+            x:f.x,
+            y:f.y,
+            type:f.type
+        }));
+
+    socket.emit(
+        "gameState",
+        data
+    );
+}
+
+// 相手状態受信
+socket.on(
+    "enemyState",
+    (data)=>{
+
+    enemyFruitList = data;
+});
+
+// 描画
+function draw(){
+
+    myCtx.clearRect(
+        0,
+        0,
+        myCanvas.width,
+        myCanvas.height
+    );
+
+    enemyCtx.clearRect(
+        0,
+        0,
+        enemyCanvas.width,
+        enemyCanvas.height
+    );
+
+    fruitList.forEach(f=>{
+
+        f.update();
+
+        f.draw(myCtx);
+    });
+
+    enemyFruitList.forEach(f=>{
+
+        enemyCtx.beginPath();
+
+        enemyCtx.fillStyle =
+            fruits[f.type].color;
+
+        enemyCtx.arc(
+            f.x,
+            f.y,
+            fruits[f.type].r,
+            0,
+            Math.PI * 2
+        );
+
+        enemyCtx.fill();
+    });
+
+    sendState();
+
+    requestAnimationFrame(draw);
+}
+
+draw();
+
+</script>
+
+</body>
+</html>
