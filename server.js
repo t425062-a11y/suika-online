@@ -12,12 +12,26 @@ io.on("connection", (socket) => {
 
     console.log("接続");
 
+    socket.on("joinRoom", (roomId) => {
+
+        socket.join(roomId);
+
+        socket.roomId = roomId;
+
+        console.log("参加:", roomId);
+
+    });
+
     socket.on("gameState", (data) => {
 
-        socket.broadcast.emit(
-            "enemyState",
-            data
-        );
+        if (socket.roomId) {
+
+            socket.to(socket.roomId).emit(
+                "enemyState",
+                data
+            );
+
+        }
 
     });
 
