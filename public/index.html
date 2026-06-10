@@ -1,3 +1,2288 @@
+この画面でよいですか
+
+index.html は存在しています。
+なので次は、中身が短すぎるのが原因です。
+
+今：
+
+481 バイト
+
+しかないので、途中で切れている可能性があります。
+
+public/index.html を全部消して、
+これを丸ごと貼り直してください。
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>オンライン対戦</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#f7d98c;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+#container{
+    display:flex;
+    gap:30px;
+}
+
+canvas{
+    background:white;
+    border:5px solid black;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="container">
+
+    <div>
+        <h2>自分</h2>
+        <canvas id="myCanvas"
+                width="400"
+                height="600"></canvas>
+    </div>
+
+    <div>
+        <h2>相手</h2>
+        <canvas id="enemyCanvas"
+                width="400"
+                height="600"></canvas>
+    </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+const socket = io();
+
+const myCanvas =
+    document.getElementById("myCanvas");
+
+const myCtx =
+    myCanvas.getContext("2d");
+
+const enemyCanvas =
+    document.getElementById("enemyCanvas");
+
+const enemyCtx =
+    enemyCanvas.getContext("2d");
+
+const gravity = 0.35;
+
+const fruits = [
+    { r:20, color:"red" },
+    { r:30, color:"orange" },
+    { r:40, color:"yellow" },
+    { r:50, color:"green" }
+];
+
+class Fruit{
+
+    constructor(x,y,type){
+
+        this.x = x;
+        this.y = y;
+
+        this.type = type;
+
+        this.radius = fruits[type].r;
+
+        this.color = fruits[type].color;
+
+        this.vy = 0;
+    }
+
+    update(){
+
+        this.vy += gravity;
+
+        this.y += this.vy;
+
+        if(
+            this.y + this.radius >
+            myCanvas.height
+        ){
+
+            this.y =
+                myCanvas.height -
+                this.radius;
+
+            this.vy *= -0.2;
+        }
+    }
+
+    draw(ctx){
+
+        ctx.beginPath();
+
+        ctx.fillStyle = this.color;
+
+        ctx.arc(
+            this.x,
+            this.y,
+            this.radius,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+    }
+}
+
+let fruitList = [];
+
+let enemyFruitList = [];
+
+myCanvas.addEventListener(
+    "click",
+    (e)=>{
+
+    const rect =
+        myCanvas.getBoundingClientRect();
+
+    const x =
+        e.clientX - rect.left;
+
+    const type =
+        Math.floor(Math.random() * 4);
+
+    const fruit =
+        new Fruit(x,50,type);
+
+    fruitList.push(fruit);
+});
+
+// 自分状態送信
+function sendState(){
+
+    const data =
+        fruitList.map(f=>({
+
+            x:f.x,
+            y:f.y,
+            type:f.type
+        }));
+
+    socket.emit(
+        "gameState",
+        data
+    );
+}
+
+// 相手状態受信
+socket.on(
+    "enemyState",
+    (data)=>{
+
+    enemyFruitList = data;
+});
+
+// 描画
+function draw(){
+
+    myCtx.clearRect(
+        0,
+        0,
+        myCanvas.width,
+        myCanvas.height
+    );
+
+    enemyCtx.clearRect(
+        0,
+        0,
+        enemyCanvas.width,
+        enemyCanvas.height
+    );
+
+    fruitList.forEach(f=>{
+
+        f.update();
+
+        f.draw(myCtx);
+    });
+
+    enemyFruitList.forEach(f=>{
+
+        enemyCtx.beginPath();
+
+        enemyCtx.fillStyle =
+            fruits[f.type].color;
+
+        enemyCtx.arc(
+            f.x,
+            f.y,
+            fruits[f.type].r,
+            0,
+            Math.PI * 2
+        );
+
+        enemyCtx.fill();
+    });
+
+    sendState();
+
+    requestAnimationFrame(draw);
+}
+
+draw();
+
+</script>
+
+</body>
+</html>
+
+保存後：
+
+黒画面で Ctrl + C
+node server.js
+ブラウザで
+http://localhost:8080
+
+を開いてください。
+
+でました
+
+成功です。
+これでサーバPC側は完成しています。
+
+次は相手PCで：
+
+http://172.20.10.9:8080
+
+を開いてください。
+
+もし接続できたら、
+
+サーバ側の黒画面に：
+
+接続
+
+が追加表示されます。
+
+その後：
+
+片方でクリック
+もう片方の「相手」画面に円表示
+
+されればオンライン対戦成功です。
+
+スマホで開けませんか？
+
+はい、開けます。
+むしろスマホの方が接続しやすいです。
+
+スマホを：
+
+同じテザリング
+
+に接続してください。
+
+その後スマホのブラウザで：
+
+http://172.20.10.9:8080
+
+を開きます。
+
+もし開けない場合は：
+
+サーバPCのファイアウォールをOFF
+
+Windows検索：
+
+Windows セキュリティ
+
+↓
+
+ファイアウォールとネットワーク保護
+
+↓
+
+現在のネットワーク
+
+↓
+
+Microsoft Defender ファイアウォール
+
+をOFF。
+
+その後もう一度：
+
+http://172.20.10.9:8080
+
+をスマホで開いてください。
+
+成功すると：
+
+PC
+スマホ
+
+でリアルタイム同期できます。
+
+Welcome to Node.js v24.15.0.
+Type ".help" for more information.
+
+また > が表示されているので、
+
+Node.js の対話モード(REPL)
+
+に入っています。
+
+この状態では Webサーバは起動していません。
+
+抜けるには：
+
+.exit
+
+と入力して Enter
+
+または
+
+Ctrl + C
+
+を2回押します。
+
+すると、
+
+C:\Users\ryouya\suika-online>
+
+のような表示に戻ります。
+
+その状態で初めて：
+
+node server.js
+
+を実行します。
+
+成功すると：
+
+Server Start
+
+と表示されて止まります。
+
+そのまま黒い画面は閉じないでください。
+
+今の画面で node server.js を打つのではなく、まず .exit を入力してみてください。戻った後の表示を教えてください。
+
+Ctrl + C
+
+
+を2回だと終了してしまいます
+
+それで正常です。
+
+Ctrl + C を2回押すと、
+
+Welcome to Node.js v24.15.0.
+Type ".help" for more information.
+>
+
+の Node.js対話モード が終了して、黒い画面自体が閉じたり、コマンドプロンプトに戻ったりします。
+
+今やるべきことは、
+
+① Node.js の画面を閉じる
+
+Ctrl + C を2回押して終了
+
+② 新しく「コマンドプロンプト(cmd)」を開く
+
+Windowsキー → 「cmd」と入力 → 「コマンドプロンプト」を開く
+
+すると次のような画面になります。
+
+C:\Users\ryouya>
+
+重要: > だけではなく、C:\Users\...> が表示されていること
+
+③ プロジェクトフォルダへ移動
+cd C:\Users\ryouya\suika-online
+④ サーバ起動
+node server.js
+
+成功すると
+
+Server Start
+
+が表示されます。
+
+今確認したいので、
+
+あなたが現在見ている画面の表示をそのまま送ってください。
+
+例えば
+
+>
+
+なのか
+
+C:\Users\ryouya>
+
+なのか
+
+C:\Users\ryouya\suika-online>
+
+なのかを教えてください。これで次に何をすればいいか正確に分かります。
+
+できました
+
+よかったです！
+
+これで
+
+node server.js
+
+↓
+
+Server Start
+
+になっているなら、サーバは起動しています。
+
+次の確認をしてください。
+
+サーバPC
+
+ブラウザで
+
+http://localhost:8080
+
+を開く
+
+スマホや別PC
+
+同じテザリング（または同じWi-Fi）に接続して、
+
+http://172.20.10.9:8080
+
+を開く
+
+※ 172.20.10.9 は先ほどの ipconfig の IPv4 アドレスです。
+
+接続成功の確認
+
+スマホや別PCが接続すると、サーバを起動している黒い画面に
+
+接続
+
+と表示されます。
+
+もしスマホや別PCでまだ開けない場合は、
+
+サーバPCで http://localhost:8080 は開けるか
+スマホ/別PCで出るエラーメッセージ（スクリーンショット可）
+
+を教えてください。
+
+また、このまま進めるなら次は
+
+ルーム作成機能
+マッチング機能
+相手の盤面をリアルタイム表示
+おじゃまフルーツ送信
+勝敗判定
+
+まで実装できます。
+
+違うネットワークでもできるようになりませんか
+
+はい、できます。
+
+ただし現在の方法は
+
+PC(サーバ)
+↓
+172.20.10.9:8080
+↓
+同じWi-Fi・同じテザリング内のみ
+
+なので、違うネットワークからは接続できません。
+
+違う場所の友達と対戦したいなら、主に3つ方法があります。
+
+方法1：Render（おすすめ・無料）
+
+Node.jsサーバをインターネット上に公開します。
+
+流れ：
+
+GitHubアカウント作成
+ソースコードをGitHubへアップロード
+Renderに登録
+GitHubリポジトリを連携
+公開URL発行
+
+例：
+
+https://suika-online.onrender.com
+
+こうなると、
+
+自宅PC
+学校PC
+スマホ
+別県の友達
+
+全員が同じURLで接続できます。
+
+方法2：Railway
+
+Renderと似ています。
+
+https://suika-game.up.railway.app
+
+のようなURLになります。
+
+設定は少し簡単です。
+
+方法3：自宅PCを公開
+
+ルーター設定で
+
+ポートフォワーディング
+
+を行います。
+
+ただし
+
+設定が難しい
+セキュリティリスクあり
+
+のでおすすめしません。
+
+今後のおすすめ
+
+あなたの場合は
+
+HTML
+JavaScript
+Node.js
+Socket.IO
+
+で既に動いているので、
+
+次は
+
+GitHub
+↓
+Render
+
+が最も簡単です。
+
+そうすると
+
+https://○○.onrender.com
+
+を友達に送るだけで対戦できます。
+
+GitHubアカウントを持っていますか？
+
+持っているなら、次に
+
+suika-online を GitHub にアップロードする手順
+
+から説明できます。
+
+もっています
+
+では次は GitHub → Render公開 をやりましょう。
+
+今ある suika-online をそのまま公開できます。
+
+① GitHubにアップロード
+
+suika-online フォルダでコマンドプロンプトを開き、
+
+git init
+git add .
+git commit -m "first commit"
+
+GitHubで新しいリポジトリを作成
+
+例：
+
+suika-online
+
+GitHubに表示されるURLを使って
+
+git remote add origin https://github.com/あなたのユーザー名/suika-online.git
+git branch -M main
+git push -u origin main
+② Render登録
+
+Render：
+
+Render
+
+GitHubでログイン
+
+③ Web Service作成
+
+Renderで
+
+New +
+↓
+Web Service
+
+を選択
+
+GitHubの
+
+suika-online
+
+を選択
+
+④ 設定
+
+Name
+
+suika-online
+
+Build Command
+
+npm install
+
+Start Command
+
+node server.js
+⑤ package.json確認
+
+package.json に scripts を追加しておくと便利です。
+
+{
+  "name": "suika-online",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+⑥ 公開
+
+数分待つと
+
+https://suika-online.onrender.com
+
+のようなURLが発行されます。
+
+そのURLを開けば、
+
+PC
+スマホ
+別の家
+別の県
+
+からでも接続できます。
+
+次に進む前に、GitHubのリポジトリURL（例: https://github.com/○○/suika-online）を教えてください。GitHubへの push が成功しているか確認できます。
+
+suika-online フォルダでコマンドプロンプトを開き、 どうすればいいですか
+
+今いる場所が
+
+C:\Users\ryouya\suika-online>
+
+なら、そのまま以下を入力すればOKです。
+
+git init
+
+Enter
+
+次に
+
+git add .
+
+Enter
+
+次に
+
+git commit -m "first commit"
+
+Enter
+
+もし
+
+git は内部コマンドまたは外部コマンド...
+
+と表示されたら、Gitがインストールされていません。
+
+その場合は Git をインストールする必要があります。
+
+まず確認のため、コマンドプロンプトで
+
+git --version
+
+を実行して、表示された結果をそのまま送ってください。
+
+C:\Users\ryouya\suika-online>git init
+'git' は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+Gitがインストールされていません。
+
+まずGitをインストールしましょう。
+
+1. Gitをダウンロード
+
+公式サイト：
+
+Git for Windows
+
+を開くと自動でダウンロードが始まります。
+
+2. インストール
+
+基本的に
+
+Next
+Next
+Next
+Install
+
+で大丈夫です。
+
+途中で
+
+Add Git to PATH
+
+のような選択肢が出たら、そのままデフォルト設定を選んでください。
+
+3. インストール後
+
+コマンドプロンプトを一度閉じて、開き直します。
+
+そして
+
+git --version
+
+を実行します。
+
+成功すると例えば
+
+git version 2.50.1.windows.1
+
+のように表示されます。
+
+表示されたら次に
+
+cd C:\Users\ryouya\suika-online
+git init
+git add .
+git commit -m "first commit"
+
+を実行してGitHubへアップロードする準備をします。
+
+Gitのインストールが終わったら、git --version の結果を送ってください。
+
+C:\Users\ryouya\suika-online>git commit -m "first commit"
+
+そのコマンドを実行した結果を確認したいです。
+
+git commit -m "first commit" を実行したあとに表示された内容を、そのまま貼り付けてください。
+
+例えば成功なら、
+
+[main abc1234] first commit
+ 5 files changed...
+
+のような表示になります。
+
+もし失敗している場合は、
+
+Author identity unknown
+
+や
+
+nothing to commit
+
+などのメッセージが出ます。
+
+git commit -m "first commit" の実行結果を全部送ってください。
+
+Author identity unknown
+*** Please tell me who you are.
+Run
+git config --global user.email "you@example.com"
+git config --global user.name "Your Name"
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+fatal: unable to auto-detect email address (got 'ryouya@yamazakipc.(none)')
+C:\Users\ryouya\suika-online>
+
+ここまで順調です。
+
+Gitに「あなたの名前とメールアドレスを教えてください」と言われています。
+
+GitHubで使っている
+
+ユーザー名
+メールアドレス
+
+を設定します。
+
+例えば、
+
+git config --global user.name "ryouya"
+git config --global user.email "example@gmail.com"
+
+のように入力します。
+
+⚠️ example@gmail.com の部分は、GitHubに登録しているメールアドレスに置き換えてください。
+
+GitHubのメールアドレスが分からない場合は、
+
+GitHub → 右上のプロフィール画像 → Settings → Emails
+
+で確認できます。
+
+設定後にもう一度
+
+git commit -m "first commit"
+
+を実行してください。
+
+成功すると、
+
+[master (root-commit) xxxxxxx] first commit
+...
+
+のような表示になります。
+
+設定したあとに表示された内容を送ってください。
+
+グーグルアカウントでログインしています
+
+Googleアカウントでログインしていても、GitHubにはメールアドレスが登録されています。
+
+確認方法：
+
+GitHubを開く
+右上のプロフィールアイコン
+Settings
+左メニューの Emails
+
+そこでメールアドレスが確認できます。
+
+もし面倒なら、とりあえずGit用に設定してしまっても大丈夫です。
+
+例えば：
+
+git config --global user.name "ryouya"
+git config --global user.email "あなたのGmailアドレス"
+
+例：
+
+git config --global user.name "ryouya"
+git config --global user.email "abc123@gmail.com"
+
+その後、
+
+git commit -m "first commit"
+
+を実行してください。
+
+もしGitHubのメールアドレスが分からなければ、
+
+git config --global user.name "ryouya"
+git config --global user.email "あなたのGmailアドレス"
+
+の「あなたのGmailアドレス」の部分だけ教えてもらえれば、入力例を作れます（パスワードは不要です）。
+
+はい、できます。
+
+Gitは最低限
+
+名前
+メールアドレス
+
+があればコミットできます。
+
+例えばメールアドレスだけ使いたいなら、名前は適当で構いません。
+
+git config --global user.name "ryouya"
+git config --global user.email "あなたのメールアドレス"
+
+例：
+
+git config --global user.name "ryouya"
+git config --global user.email "abc123@gmail.com"
+
+その後、
+
+git commit -m "first commit"
+
+を実行してください。
+
+設定が正しく入ったか確認するには：
+
+git config --global user.name
+git config --global user.email
+
+を実行します。
+
+もしGitHubに公開するだけなら、GitHubに登録しているメールアドレスと同じでなくても動作します。まずは普段使っているメールアドレスで設定して大丈夫です。
+
+t425062@m.chukyo-u.ac.jp
+
+では次を入力してください。
+
+git config --global user.name "ryouya"
+git config --global user.email "t425062@m.chukyo-u.ac.jp"
+
+入力後、設定確認：
+
+git config --global user.name
+git config --global user.email
+
+すると
+
+ryouya
+t425062@m.chukyo-u.ac.jp
+
+と表示されるはずです。
+
+その後、
+
+git commit -m "first commit"
+
+を実行してください。
+
+成功したら表示された内容をそのまま送ってください。
+
+次は GitHub に push するところまで進めます。
+
+C:\Users\ryouya\suika-online>git config --global user.email "t425062@m.chukyo-u.ac.jp"
+C:\Users\ryouya\suika-online>
+
+少し間違っています。
+
+入力したのが
+
+git config --global user.email "[t425062@m.chukyo-u.ac.jp](mailto\:t425062@m.chukyo-u.ac.jp)"
+
+になっています。
+
+これはメールアドレスではなく、Markdownリンクの文字列です。
+
+正しくは：
+
+git config --global user.email "t425062@m.chukyo-u.ac.jp"
+
+です。
+
+そして名前も設定してください。
+
+git config --global user.name "ryouya"
+
+その後、確認：
+
+git config --global user.name
+git config --global user.email
+
+結果が
+
+ryouya
+t425062@m.chukyo-u.ac.jp
+
+になっていることを確認します。
+
+最後に：
+
+git commit -m "first commit"
+
+を実行してください。
+
+表示された結果を送ってください。
+
+C:\Users\ryouya\suika-online>git config --global user.name "ryouya"
+
+C:\Users\ryouya\suika-online>ryouya
+'ryouya' は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+それは正常です。
+
+あなたがやってしまったのは、
+
+git config --global user.name "ryouya"
+
+を実行した後に、
+
+ryouya
+
+だけを入力してしまった状態です。
+
+ryouya はコマンドではないので、
+
+'ryouya' は、内部コマンドまたは外部コマンド...
+
+となります。
+
+次は確認コマンドを実行してください。
+
+git config --global user.name
+
+Enter
+
+次に
+
+git config --global user.email
+
+Enter
+
+結果を送ってください。
+
+例えば、
+
+ryouya
+t425062@m.chukyo-u.ac.jp
+
+のように表示されれば設定成功です。
+
+その後、
+
+git commit -m "first commit"
+
+を実行します。
+
+よかったです。
+
+次にコミットが成功したか確認したいので、
+
+git commit -m "first commit"
+
+を実行した結果をそのまま送ってください。
+
+成功なら例えばこんな表示になります。
+
+[master (root-commit) 1234567] first commit
+ 15 files changed, ...
+ create mode 100644 server.js
+ create mode 100644 public/index.html
+
+もし別のエラーが出たら、その内容をそのまま貼り付けてください。
+
+その後、GitHubにリポジトリを作成して push する手順に進みます。
+
+C:\Users\ryouya\suika-online>git commit -m "first commit"
+On branch master
+nothing to commit, working tree clean
+
+それは良い状態です。
+
+nothing to commit, working tree clean
+
+の意味は、
+
+既にコミット済み
+
+です。
+
+つまり Git の設定も完了し、ファイルもコミットされています。
+
+次は GitHub にリポジトリを作ります。
+
+1. GitHubで新しいリポジトリ作成
+
+GitHubを開いて
+
+New repository
+
+を押します。
+
+Repository name は
+
+suika-online
+
+などでOKです。
+
+Public を選択して作成してください。
+
+2. 作成後
+
+GitHubに表示されるURL
+
+例：
+
+https://github.com/あなたのユーザー名/suika-online.git
+
+を教えてください。
+
+または作成後の画面のスクリーンショットを送ってください。
+
+そのURLを使って
+
+git remote add origin ...
+git push -u origin main
+
+まで進めます。
+
+義っとハブを入れている機器が別なのですが、できませんか？
+
+はい、できます。
+
+GitHubにアップロードするPCと、今開発しているPCが別でも問題ありません。
+
+方法は2つあります。
+
+方法1（おすすめ）
+
+開発しているPCにGitHubへログインする
+
+GitHubアカウントは同じものを使えばよいので、今のPCでGitHubにログインして、そのまま
+
+git push
+
+できます。
+
+方法2
+
+suika-online フォルダをGitHubを使うPCへコピーする
+
+例えば
+
+USBメモリ
+OneDrive
+Google Drive
+ZIP圧縮して送る
+
+などで
+
+C:\Users\ryouya\suika-online
+
+を丸ごと移します。
+
+そのPCで
+
+git init
+git add .
+git commit -m "first commit"
+
+を実行してGitHubへアップロードします。
+
+どちらがお手元の環境に近いですか？
+
+今のPCでもGitHubにログインできる
+GitHubを使うPCが別で、フォルダを移したい
+
+のどちらか教えてください。
+
+Skip to content
+
+Dashboard
+Top repositories
+image-media-lab/github-horinishi
+image-media-lab/web_desgin_2026-github-tailwind
+image-media-lab/docker-web-t425062-a11y
+Join GitHub Education!
+
+GitHub Education opens doors to new skills, tools, and a collaborative community eager to drive innovation. Join us and build a foundation for your future in technology.
+
+Dashboard
+Home
+Chat Commands
+Agent
+Create issue
+Write code
+Git
+Pull requests
+You've been added to the image-media-lab organization.
+Feed
+Trending repositories
+
+·See more
+
+mvanhorn/last30days-skill
+
+AI agent skill that researches any topic across Reddit, X, YouTube, HN, Polymarket, and the web - then synthesizes a grounded summary
+
+ Python 37.6k
+
+NoopApp/noop
+
+Offline WHOOP companion — pair your strap over Bluetooth, keep all data on your own device. No cloud, no account, no subscription.
+
+ Swift 1.1k
+
+Footer
+
+© 2026 GitHub, Inc.
+
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information
+
+Oct 28-29■San Francisco, CA
+
+Save $600 with Super Early Bird passes through July 8.
+
+Register now
+
+Latest from our changelog
+
+2 hours ago
+
+Dependabot version updates now support the Deno ecosystem
+
+6 hours ago
+
+Upcoming breaking changes for npm v12
+
+9 hours ago
+
+Claude Fable 5 is generally available for GitHub Copilot
+
+19 hours ago
+
+Periodic code scanning of inactive repositories
+
+View changelog →
+
+今見えているのは GitHub のホーム画面です。
+
+まだリポジトリを作っていません。
+
+次の手順で進めてください。
+
+右上の ＋ を押す
+New repository を選ぶ
+Repository name に
+suika-online
+
+を入力
+
+Public を選択
+Create repository を押す
+
+作成すると、こんなページになります。
+
+https://github.com/あなたのユーザー名/suika-online
+
+または
+
+https://github.com/image-media-lab/...
+
+ではなく、あなた個人のリポジトリです。
+
+作成できたら表示されているページのURLか、画面のスクリーンショットを送ってください。
+
+その次に
+
+git remote add origin ...
+git push -u origin master
+
+を実行して Render に公開できる状態にします。
+
+Skip to content
+t425062-a11y
+suika-online
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security and quality
+Insights
+Settings
+Owner avatar
+suika-online
+Public
+Set up GitHub Copilot
+Use GitHub's AI pair programmer to autocomplete suggestions as you code.
+Add collaborators to this repository
+Search for people using their GitHub username or email address.
+Quick setup — if you’ve done this kind of thing before
+or
+https://github.com/t425062-a11y/suika-online.git
+Get started by creating a new file or uploading an existing file. We recommend every repository include a README, LICENSE, and .gitignore.
+…or create a new repository on the command line
+echo "# suika-online" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/t425062-a11y/suika-online.git
+git push -u origin main
+…or push an existing repository from the command line
+git remote add origin https://github.com/t425062-a11y/suika-online.git
+git branch -M main
+git push -u origin main
+ProTip! Use the URL for this page when adding GitHub as a remote.
+Footer
+© 2026 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information
+
+完璧です。
+
+GitHubリポジトリが作成できています。
+
+リポジトリURLは
+
+https://github.com/t425062-a11y/suika-online.git
+
+です。
+
+次にコマンドプロンプトで、C:\Users\ryouya\suika-online> の状態で以下を実行してください。
+
+git remote add origin https://github.com/t425062-a11y/suika-online.git
+
+次に
+
+git branch -M main
+
+次に
+
+git push -u origin main
+
+途中で
+
+Username for 'https://github.com':
+
+と聞かれたら
+
+t425062-a11y
+
+を入力します。
+
+さらに
+
+Password for 'https://github.com':
+
+と聞かれた場合は、GitHubのパスワードではなく Personal Access Token (PAT) が必要です。
+
+まずは上の3つのコマンドを実行してください。
+
+特に最後の
+
+git push -u origin main
+
+の結果をそのまま送ってください。
+
+そこで認証が必要かどうか確認できます。
+
+その画面なら順調です。
+
+Gitが GitHub へのログインを求めています。
+
+やること
+
+「Sign in with your browser」 をクリックしてください。
+
+するとブラウザが開いて GitHub の認証画面になります。
+
+GitHubにログイン済みなら、
+
+Authorize Git Credential Manager
+
+や
+
+Authorize Git
+
+のような画面が出るので Authorize を押します。
+
+認証が終わると、コマンドプロンプト側に戻って自動的に処理が進み、
+
+Enumerating objects...
+Writing objects...
+To https://github.com/t425062-a11y/suika-online.git
+
+のような表示が出ます。
+
+成功すると最後に
+
+branch 'main' set up to track 'origin/main'
+
+などと表示されます。
+
+認証後にコマンドプロンプトへ表示された内容をそのまま送ってください。
+
+そこで GitHub へのアップロードが成功したか確認できます。
+
+その画面で大丈夫です。
+
+右下の緑色の
+
+Authorize git-ecosystem
+
+をクリックしてください。
+
+認証が成功すると、
+
+Success!
+Git Credential Manager authentication succeeded.
+
+のような画面になります。
+
+その後、コマンドプロンプト側に戻って、
+
+Enumerating objects...
+Counting objects...
+Writing objects...
+To https://github.com/t425062-a11y/suika-online.git
+
+のような表示が出て、GitHubへアップロードされます。
+
+「Authorize git-ecosystem」を押した後の
+
+ブラウザの表示
+または
+コマンドプロンプトの表示
+
+を送ってください。
+
+そこまで行けば GitHub へのアップロード完了です。
+
+Authorize git-ecosystemが起動できません
+
+「起動できません」というのは、
+
+ボタンを押しても何も起きない
+押せない（グレーアウト）
+エラーが出る
+
+のどれでしょうか？
+
+まず試してください。
+
+方法1
+
+ブラウザを更新（F5）
+
+その後もう一度
+
+Authorize git-ecosystem
+
+を押す
+
+方法2
+
+GitHubから一度ログアウトして、再ログイン
+
+その後もう一度
+
+git push -u origin main
+
+を実行
+
+方法3
+
+ボタンが押せない場合
+
+別ブラウザ（Chrome / Edge）で開いてみる
+
+また、コマンドプロンプト側は今どうなっていますか？
+
+例えば
+
+Waiting for authentication...
+
+のような表示が出ていますか？
+
+コマンドプロンプトの表示をそのまま貼り付けてください。そうすると原因を特定できます。
+
+押せないです
+
+画像を見る限り、ボタン自体は有効に見えます。
+
+まず次を確認してください。
+
+① 画面を一番下までスクロール
+
+GitHubの認証画面は、利用規約などがある場合に最後までスクロールしないと押せないことがあります。
+
+② ブラウザのズームを100%にする
+
+Ctrl + 0
+
+を押してからもう一度試してください。
+
+③ EdgeならChromeで開く（または逆）
+
+ブラウザの問題で押せないことがあります。
+
+④ 一番簡単な確認
+
+今の認証画面を閉じて、
+
+コマンドプロンプトで
+
+git push -u origin main
+
+をもう一度実行してください。
+
+新しい認証画面が開くことがあります。
+
+また、「押せない」というのが
+
+マウスカーソルは変わるが反応しない
+クリックしても無反応
+ボタンが灰色でクリック不可
+
+のどれなのか教えてください。
+
+可能なら、画面全体（下まで見える状態）のスクリーンショットも送ってください。
+
+無反応です
+
+無反応なら、Git Credential Manager の認証画面が壊れている可能性があります。
+
+GitHubへのアップロードができているか先に確認しましょう。
+
+GitHubのリポジトリページ
+
+https://github.com/t425062-a11y/suika-online
+
+を開いて、
+
+server.js
+package.json
+public フォルダ
+
+が表示されていますか？
+
+もし表示されている場合
+
+既に git push は成功しています。
+そのまま Render に進めます。
+
+もし何も表示されず
+Quick setup
+
+の画面のままなら、まだアップロードできていません。
+
+その場合はコマンドプロンプトで次を実行してください。
+
+git remote -v
+
+結果を送ってください。
+
+また、
+
+git status
+
+の結果も送ってください。
+
+その2つで現在の状態が分かります。
+
+まだ GitHub にアップロードされていません。
+
+今の画面が
+
+Quick setup
+
+のままなので、リポジトリは空です。
+
+まず現在の状態を確認したいので、コマンドプロンプトで次の2つを実行してください。
+
+git remote -v
+
+次に
+
+git status
+
+結果をそのまま貼り付けてください。
+
+さらに認証画面が無反応だった件もあるので、
+
+git push -u origin main
+
+を実行したときに、コマンドプロンプトに何が表示されたかも教えてください。
+
+この3つが分かれば、GitHubへのアップロードを完了させられます。
+
+
+C:\Users\ryouya\suika-online>git push -u origin main
+info: please complete authentication in your browser
+
+そこまで進んでいるなら、
+
+info: please complete authentication in your browser
+
+は
+
+ブラウザ認証待ち
+
+の状態です。
+
+ただ、先ほどの Authorize git-ecosystem ボタンが反応しないので、Git Credential Manager が正常に動いていない可能性があります。
+
+まず確認したいので、コマンドプロンプトで次を実行してください。
+
+git remote -v
+
+結果を貼り付けてください。
+
+また、一番簡単な回避方法として、GitHubのWeb画面から直接アップロードする方法もあります。
+
+GitHubの suika-online リポジトリを開く
+uploading an existing file をクリック
+C:\Users\ryouya\suika-online の中身をドラッグ＆ドロップ
+Commit changes
+
+これなら Git 認証で詰まらずに GitHub に公開できます。
+
+まずは git remote -v の結果を送ってください。そこから最短ルートで進めます。
+
+コードを張り付けられません
+
+画像を見る限り、
+
+git branch -M main
+git push -u origin main
+info: please complete authentication in your browser...
+
+まで進んでいます。
+
+つまり GitHubへのアップロード直前 です。
+
+ただ、認証画面のボタンが押せないので、別の方法が早いです。
+
+GitHubへ直接アップロード
+
+今開いている
+
+https://github.com/t425062-a11y/suika-online
+
+のページで、
+
+uploading an existing file
+
+をクリックしてください。
+
+もし見つからなければ、
+
+Add file
+↓
+Upload files
+
+を押します。
+
+その後、
+
+C:\Users\ryouya\suika-online
+
+を開いて、
+
+以下をドラッグ＆ドロップします。
+
+server.js
+package.json
+package-lock.json
+public フォルダ
+
+⚠️ node_modules フォルダはアップロードしないでください。
+
+アップロード後、
+
+Commit changes
+
+を押せば GitHub に保存されます。
+
+もし「Add file」が見つからない場合は、今の GitHub リポジトリ画面のスクリーンショットを送ってください。どこを押すか指示します。
+
+その画面で正しいです。
+
+次に choose your files をクリックしてください。
+
+開くフォルダで
+
+C:\Users\ryouya\suika-online
+
+を開きます。
+
+そして次のファイルを選択してください。
+
+server.js
+package.json
+package-lock.json
+
+さらに
+
+public
+
+フォルダもアップロードします。
+
+⚠️ 重要
+
+node_modules フォルダは選ばないでください。
+
+アップロードすると非常に時間がかかります。
+
+ファイル選択後、
+
+GitHub上に
+
+server.js
+package.json
+package-lock.json
+public/
+
+が表示されます。
+
+その状態になったら画面下の
+
+Commit changes
+
+を押してください。
+
+アップロード後の画面（ファイル一覧が見える画面）のスクリーンショットを送ってください。そこまでできれば Render 公開に進めます。
+
+素晴らしいです！
+
+GitHubへのアップロードは成功しています。🎉
+
+画面に
+
+public
+package-lock.json
+package.json
+server.js
+
+が見えているので、リポジトリは完成しています。
+
+次は Render で世界中から接続できるようにする
+Renderを開く
+
+Render
+
+Sign Up → GitHubでログイン
+ログイン後
+New +
+↓
+Web Service
+
+を押す
+
+GitHub連携画面で
+suika-online
+
+を選択
+
+設定
+
+Name
+
+suika-online
+
+Build Command
+
+npm install
+
+Start Command
+
+node server.js
+重要
+
+Renderでは server.js を少し修正します。
+
+今の
+
+http.listen(8080, "0.0.0.0", ()=>{
+
+を
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", ()=>{
+    console.log("Server Start");
+});
+
+に変更してください。
+
+変更後はGitHubの server.js を開いて編集し、
+
+Commit changes
+
+を押します。
+
+まずは Render にログインして、
+
+New +
+↓
+Web Service
+
+まで進めてください。
+
+そこで表示された画面のスクリーンショットを送ってください。次の設定を一緒に確認します。
+
+義っとハブのアカウントでろぐいんしたほうがいいですか　
+
+はい、そのほうが良いです。
+
+今あなたの suika-online は
+
+t425062-a11y/suika-online
+
+に作成されています。
+
+なので Render でも 同じ GitHub アカウント（t425062-a11y） でログインすると、
+
+suika-online
+
+が自動で表示されて選択できます。
+
+手順
+
+Renderにアクセス
+Render
+Sign up with GitHub または Continue with GitHub
+GitHubで
+t425062-a11y
+
+のアカウントを使ってログイン
+
+GitHub連携を許可
+Renderの画面で
+New +
+↓
+Web Service
+
+を選択
+
+一覧に
+suika-online
+
+が出てくるはずです
+
+ログインできたら、Renderの画面（Repositories一覧）が見えるスクリーンショットを送ってください。そこから公開設定を進めます。
+
+Skip to content
+
+Install Render
+
+Install on your personal account t425062-a11y
+
+for these repositories:
+
+All repositoriesThis applies to all current and future repositories owned by the resource owner. Also includes public repositories (read-only).
+
+Only select repositoriesSelect at least one repository. Also includes public repositories (read-only).
+
+with these permissions:
+
+Read access to Dependabot alerts, code, and metadata
+Read and write access to actions, checks, commit statuses, deployments, environments, issues, pull requests, repository hooks, and workflows
+
+User permissions
+
+Render can also request users' permission to the following resources. These permissions will be requested and authorized on an individual-user basis.
+
+Read access to email addresses
+
+Next: you’ll be directed to the GitHub App’s site to complete setup.
+
+Footer
+
+© 2026 GitHub, Inc.
+
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information
+
+その画面ならOKです。
+
+おすすめは
+
+✅ Only select repositories
+
+を選んで、
+
+suika-online
+
+だけにチェックを入れてください。
+
+その後、
+
+Install & Authorize
+
+または
+
+Save
+
+や
+
+Install
+
+のボタンが下の方にあるので押します。
+
+すると Render に戻り、
+
+Create a Web Service
+
+や
+
+Connect Repository
+
+の画面になります。
+
+そこで
+
+suika-online
+
+が表示されるはずです。
+
+次の画面まで進んだらスクリーンショットを送ってください。
+
+その後、
+
+Name
+Build Command
+Start Command
+
+を設定して公開まで進めます。
+
+山山崎　稜也's workspace
+
+t
+
+New Web Service
+New Web Service
+
+Source Code
+
+Git Provider
+Public Git Repository
+Existing Image
+
+Credentials (1)
+
+t425062-a11y/suika-online
+
+0 services selected:
+
+Move
+
+いいところまで来ています。
+
+今表示されている
+
+Credentials (1)
+
+t425062-a11y/suika-online
+
+をクリックして選択してください。
+
+すると次に
+
+Name
+Region
+Branch
+Build Command
+Start Command
+
+などを入力する画面になります。
+
+その画面になったら以下を設定します。
+
+Name
+
+suika-online
+
+Branch
+
+main
+
+Build Command
+
+npm install
+
+Start Command
+
+node server.js
+
+ただし、その前に server.js を修正する必要があります。
+
+現在はおそらく
+
+http.listen(8080, "0.0.0.0", ()=>{
+    console.log("Server Start");
+});
+
+になっていますが、Renderでは
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", ()=>{
+    console.log("Server Start");
+});
+
+に変更する必要があります。
+
+まずは
+
+t425062-a11y/suika-online
+
+を選択して、次の設定画面まで進んでください。
+
+その画面のスクリーンショットを送ってください。そこで Render 用の設定を一緒に確認します。
+
+山山崎　稜也's workspace
+
+t
+
+New Web Service
+New Web Service
+
+Source Code
+
+t425062-a11y/suika-online
+
+Name
+
+A unique name for your web service.
+
+Language
+
+Choose the runtime environment for this service.
+
+Node
+
+Branch
+
+The Git branch to build and deploy.
+
+Region
+
+Your services in the same region can communicate over a private network.
+
+Region Selector
+
+Oregon (US West)
+
+Root DirectoryOptional
+
+If set, Render runs commands from this directory instead of the repository root. Additionally, code changes outside of this directory do not trigger an auto-deploy. Most commonly used with a monorepo.
+
+Build Command
+
+Render runs this command to build your app before each deploy.
+
+$
+
+Start Command
+
+Render runs this command to start your app with each deploy.
+
+$
+
+Instance Type
+
+Instance type
+
+For hobby projects
+
+Free
+
+$0/ month
+
+512 MB (RAM)
+0.1 CPU
+
+For professional use
+
+For more power and to get the most out of Render, we recommend using one of our paid instance types. All paid instances support:
+
+Zero Downtime
+SSH Access
+Scaling
+One-off jobs
+Support for persistent disks
+
+Starter
+
+$7/ month
+
+512 MB (RAM)
+0.5 CPU
+
+Standard
+
+$25/ month
+
+2 GB (RAM)
+1 CPU
+
+Pro
+
+$85/ month
+
+4 GB (RAM)
+2 CPU
+
+Pro Plus
+
+$175/ month
+
+8 GB (RAM)
+4 CPU
+
+Pro Max
+
+$225/ month
+
+16 GB (RAM)
+4 CPU
+
+Pro Ultra
+
+$450/ month
+
+32 GB (RAM)
+8 CPU
+
+Need a custom instance type? We support up to 512 GB RAM and 64 CPUs.
+
+Environment Variables
+
+Set environment-specific config and secrets (such as API keys), then read those values from your code. Learn more.
+
+Generate
+
+Add Environment Variable
+
+Add from .env
+
+Advanced
+
+Deploy web service
+
+0 services selected:
+
+Move
+
+その画面で入力してください。
+
+Name
+suika-online
+Branch
+main
+
+（すでに main になっているならそのまま）
+
+Build Command
+npm install
+Start Command
+node server.js
+Instance Type
+Free
+
+を選択
+
+その前に重要です。
+
+GitHubにある server.js の最後が
+
+http.listen(8080, "0.0.0.0", ()=>{
+    console.log("Server Start");
+});
+
+なら Render で動かない可能性があります。
+
+最後を
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", ()=>{
+    console.log("Server Start");
+});
+
+に変更して GitHub に保存するのが理想です。
+
+まず教えてください。
+
+現在の server.js の最後は
+
+http.listen(8080, "0.0.0.0", ()=>{
+
+ですか？
+
+それとも
+
+const PORT = process.env.PORT || 8080;
+
+を入れましたか？
+
+入れていなければ、先に GitHub 上で server.js を編集しましょう。Render の公開成功率が上がります。
+
+const express = require("express");
+
+const app = express();
+
+const http = require("http").createServer(app);
+
+const io = require("socket.io")(http);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+
+console.log("接続");
+
+socket.on("gameState", (data) => {
+
+    socket.broadcast.emit(
+        "enemyState",
+        data
+    );
+
+});
+
+socket.on("disconnect", () => {
+
+    console.log("切断");
+
+});
+
+
+});
+
+http.listen(8080, "0.0.0.0", () => {
+
+console.log("Server Start");
+
+
+});
+
+そのままだと Render で失敗する可能性があります。
+
+最後の部分だけ次のように変更してください。
+
 const express = require("express");
 
 const app = express();
@@ -29,8 +2314,1930 @@ io.on("connection", (socket) => {
 
 });
 
-http.listen(8080, "0.0.0.0", () => {
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", () => {
 
     console.log("Server Start");
 
 });
+GitHubで編集する方法
+GitHubの server.js を開く
+右上の鉛筆マーク（Edit）
+上のコードに書き換える
+一番下までスクロール
+Commit changes
+Commit changes をもう一度押す
+
+その後 Render に戻って
+
+Name
+
+suika-online
+
+Build Command
+
+npm install
+
+Start Command
+
+node server.js
+
+Instance Type
+
+Free
+
+を設定して、
+
+一番下の
+
+Deploy Web Service
+
+を押してください。
+
+押した後に表示される画面（ログ画面）のスクリーンショットを送ってください。そこでデプロイ成功か確認します。
+
+かなり順調です！
+
+画像を見ると、
+
+Running build command 'npm install'...
+added 88 packages...
+
+まで進んでいるので、ビルドは成功しています。
+
+今は Render が
+
+Building
+
+状態なので、あと30秒～2分ほど待ってください。
+
+次に確認する場所
+
+左の
+
+Logs
+
+をクリックして、一番下のログを見てください。
+
+成功すると最後にこんな感じが出ます。
+
+Server Start
+
+または
+
+==> Your service is live 🎉
+
+もし代わりに
+
+Error
+
+や
+
+Exited with status 1
+
+が出たら、その部分のスクリーンショットを送ってください。
+
+成功したら、
+
+画面上に表示されている
+
+https://suika-online.onrender.com
+
+を開いてみてください。
+
+開けたら、そのURLを友達に送るだけで、
+
+家
+学校
+スマホ回線
+別Wi-Fi
+
+など、どこからでも接続できるようになります。
+
+まずは Building が終わるまで待って、最後のログ を見せてください。
+
+なにでかくにんすればいいですか
+
+今見ている Render の画面で確認できます。
+
+① 左側の「Logs」をクリック
+
+画面左の
+
+Logs
+
+を押してください。
+
+② 一番下までスクロール
+
+ログの最後に次のどちらかが表示されます。
+
+成功の場合
+
+Server Start
+
+または
+
+==> Your service is live 🎉
+
+失敗の場合
+
+Error
+
+や
+
+Exited with status 1
+
+が表示されます。
+
+③ URLを開いてみる
+
+画面上の紫色のリンク
+
+https://suika-online.onrender.com
+
+をクリックしてみてください。
+
+ページが開く → 成功
+エラー画面 → ログを確認
+
+今の画面のまま Logs の一番下が見えるようにスクリーンショット を送ってください。どこを見ればいいか一緒に確認します。
+
+==> Deploying...
+==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+==> Running 'node server.js'
+Server Start
+==> Your service is live 🎉
+==>
+==> ///////////////////////////////////////////////////////////
+==>
+==> Available at your primary URL https://suika-online.onrender.com
+==>
+==> ///////////////////////////////////////////////////////////
+
+成功です！🎉
+
+ログに
+
+Server Start
+==> Your service is live 🎉
+
+と出ているので、サーバーは世界中からアクセス可能な状態になりました。
+
+あなたの公開URL
+
+suika-online
+
+確認方法
+自分のPCで上のURLを開く
+スマホ（Wi-Fiを切ってモバイル回線でも可）で同じURLを開く
+友達の端末でも同じURLを開く
+
+全員がページを開ければ公開成功です。
+
+もし「自分」と「相手」の画面が連動しない場合
+
+現在のコードは Socket.IO で通信していますが、公開後はブラウザの開発者ツール（F12）の Console にエラーが出ていないか確認したいです。
+
+まずは、
+
+https://suika-online.onrender.com を2台の端末で開いて、片方で果物を落としたときにもう片方に表示されるか
+
+試してみてください。
+
+結果を教えてください。
+
+ページは開くが同期しない
+片方しか開けない
+両方開くし同期もする
+
+のどれかを教えてください。
+
+できています
+
+おめでとうございます！🎉
+
+ここまでできたなら、
+
+✅ GitHubにアップロード完了
+✅ Renderで公開完了
+✅ 別ネットワークからアクセス可能
+✅ リアルタイム通信動作確認完了
+
+という状態です。
+
+今後はコードを修正したら、
+
+GitHubの suika-online に変更をアップロード
+Renderが自動で再デプロイ
+数十秒～数分後に公開サイトへ反映
+
+という流れになります。
+
+次の段階としては、
+
+部屋（ルーム）機能を作る
+2人だけマッチングする
+スコア同期
+ゲームオーバー同期
+果物合成の同期
+ランキング機能
+ユーザー名表示
+
+なども追加できます。
+
+まずは公開と通信成功、本当にお疲れさまでした！👏
+
+部屋を作りたいです
+
+部屋機能を作るなら、まずは 「ルームIDを入力して同じ部屋の人だけ通信する」 方式がおすすめです。
+
+現在は
+
+socket.broadcast.emit("enemyState", data);
+
+なので、接続している全員に送信されています。
+
+server.js を変更
+const express = require("express");
+const app = express();
+
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+
+    console.log("接続");
+
+    socket.on("joinRoom", (roomId) => {
+
+        socket.join(roomId);
+
+        socket.roomId = roomId;
+
+        console.log("参加:", roomId);
+    });
+
+    socket.on("gameState", (data) => {
+
+        if(socket.roomId){
+
+            socket.to(socket.roomId).emit(
+                "enemyState",
+                data
+            );
+
+        }
+
+    });
+
+    socket.on("disconnect", () => {
+
+        console.log("切断");
+
+    });
+
+});
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", () => {
+
+    console.log("Server Start");
+
+});
+index.html に追加
+
+const socket = io();
+
+の直後に追加
+
+const roomId = prompt("ルームIDを入力");
+
+socket.emit(
+    "joinRoom",
+    roomId
+);
+動作
+
+例えば
+
+あなた
+ルームID
+1234
+友達
+ルームID
+1234
+
+同じ部屋なので同期
+
+別の人
+ルームID
+5678
+
+別部屋なので同期しない
+
+さらに使いやすくするなら、
+
+「部屋作成」
+「部屋参加」
+「招待コード自動生成（ABCD1234）」
+
+のような画面も作れます。
+
+今の public/index.html はかなり長いと思うので、部屋作成ボタン付きにするなら最新の index.html 全文を貼ってください。こちらで組み込んだ完成版を作ります。
+
+全文を出すには、現在の public/index.html の最新版 が必要です。
+
+今までのやり取りを見ると、
+
+果物を落とす機能
+自分画面／相手画面
+Socket.IO通信
+Render公開
+
+までは確認できていますが、その後にコードを変更している可能性があるため、こちらで勝手に全文を作ると今の機能を消してしまう危険があります。
+
+そのため、
+
+現在 GitHub にある public/index.html の全文
+
+を貼ってください。
+
+そのコードを元に、
+
+✅ ルーム作成機能
+✅ ルーム参加機能
+✅ 同じルームの人だけ同期
+✅ Render対応
+✅ Socket.IO対応
+
+を組み込んだ 完成版の server.js と index.html の全文 を出力します。
+
+まずは public/index.html をそのまま全部貼ってください。
+
+index.html がありません ということは、現在のリポジトリは
+
+public/
+
+フォルダの中に別のHTMLファイルがあるか、まだテスト用のHTMLしか入っていない可能性があります。
+
+まず GitHub の public フォルダを開いて、
+
+中にあるファイル名を教えてください。
+
+例えば
+
+public
+ └─ index.html
+
+なのか、
+
+public
+ └─ game.html
+
+なのか確認したいです。
+
+もし本当に public の中が空なら、現在公開されているページのHTMLがどこにあるか確認するために、
+
+GitHubで public を開いたスクリーンショットを送ってください。
+
+それを見れば、部屋機能付きの完成版を作れます。
+
+なるほど。すると現在の GitHub には
+
+public/
+package-lock.json
+package.json
+server.js
+
+しか見えていないので、public フォルダの中身が表示されていません。
+
+次にやってほしいこと
+
+GitHubで
+
+public
+
+をクリックしてください。
+
+そして中に表示されるファイル名を教えてください。
+
+例えば
+
+index.html
+
+や
+
+game.html
+
+などです。
+
+もし public を開いても何も入っていない場合は、今公開中の
+
+suika-online.onrender.com
+
+が表示できているので、ローカルPCの
+
+C:\Users\ryouya\suika-online\public
+
+フォルダを開いて、中にあるファイル名を教えてください。
+
+部屋機能付きの完成版を作るには、現在使っているHTMLファイルの内容が必要です。まずファイル名を確認しましょう。
+
+すみません今の話はいったん保留で
+
+もちろん大丈夫です。
+
+部屋機能の話はいったん保留にしましょう。
+
+今は
+
+GitHub公開 ✅
+Render公開 ✅
+オンライン接続 ✅
+
+までできている状態なので、いつでも続きから再開できます。
+
+別のことで聞きたいことや、今進めたい作業があれば教えてください。
+
+貼り付けられたテキスト（1 点）(2).txt
+ドキュメント
+こちらに変更したいです
+
+はい、このコードのデザインとゲーム内容に変更したいということですね。
+
+アップロードされたコードを見ると、
+
+数字を合成するゲーム
+720×820 のキャンバス
+レベル1～11
+スコア機能
+お邪魔玉機能
+物理演算付き
+
+のゲームになっています。
+
+変更する場合は、
+
+1. GitHubの public フォルダを開く
+
+現在ある
+
+public/index.html
+
+を開きます。
+
+2. 中身を全部削除
+
+今のオンライン対戦用のHTMLをすべて削除します。
+
+3. アップロードしたコードを貼り付ける
+
+今回のコード全文を貼り付けて
+
+Commit changes
+
+を押します。
+
+ただし注意点があります。
+
+現在のコードは
+
+const socket = io();
+
+や
+
+socket.emit(...)
+
+が入っていないので、
+
+オンライン対戦機能はなくなります。
+
+つまり、
+
+このゲームに変更するだけ → OK
+このゲームをオンライン対戦対応にする → コードの改造が必要
+
+です。
+
+どちらを希望していますか？
+
+A
+
+このゲームに完全に置き換える
+
+B
+
+このゲームの見た目・ルールのままオンライン対戦対応にする
+
+Bの場合は、アップロードされたコードの全文を解析して Socket.IO を組み込みます。こちらの方がおすすめです。
+
+今までしてきたオンライン対戦が可能なように変更して張り付けるだけの状態にしてください
+
+今のファイルは途中で切れていて、ゲームロジック全体が見えていません。
+
+オンライン対戦対応版を「貼り付けるだけ」の状態で作るには、少なくとも以下が全部必要です。
+
+collide() の続き
+合体処理
+描画処理
+update() ループ
+gameOver処理
+ファイル末尾の </script></body></html>
+
+今見えているのは function collide(a, b) { const dx = の途中で終わっています。
+
+お願い
+
+アップロードしたテキストファイルの全文を送ってください。
+
+方法はどちらでもOKです。
+
+public/index.html を開いて
+Ctrl+A
+Ctrl+C
+そのままチャットに貼り付ける
+
+または
+
+index.html ファイルそのものをアップロードする
+
+全文があれば、
+
+✅ 2画面表示
+✅ Render対応
+✅ Socket.IO同期
+✅ 部屋作成・参加機能
+✅ 相手の盤面リアルタイム表示
+
+を組み込んだ
+
+server.js 完成版
+public/index.html 完成版
+
+をそのままコピペできる形で作れます。
+
+まだ途中で切れています。
+
+最後が
+
+function collide(a, b) {
+
+    const dx =
+
+で終わっているので、この状態ではオンライン対戦版を作れません。
+
+必要なのは その先のコード全部 です。
+
+具体的には
+
+function collide(a, b) {
+
+から始まって、
+
+function update()
+
+や
+
+function draw()
+
+や
+
+requestAnimationFrame(...)
+
+そして最後の
+
+</script>
+</body>
+</html>
+
+までです。
+
+今のメッセージは約半分しかありません。
+
+続きをそのまま貼ってください。
+
+「const dx =」の次の行からファイルの最後まで を送ってもらえれば、
+
+オンライン対戦対応
+Render対応
+ルーム機能対応
+相手画面表示
+
+を組み込んだ完成版を作れます。
+
+貼り付けられたテキスト（1 点）(4).txt
+ドキュメント
+
+ファイルを確認しました。
+
+ただし、このコードは約700行近い規模で、さらに
+
+Socket.IO同期
+2画面表示
+ルーム機能
+Render対応
+
+を追加すると index.html だけで1000行超え になります。
+
+そのため、このチャット1回で
+
+server.js 全文
+index.html 全文
+
+を完全版として出力するのは文字数制限で不可能です。
+
+また、現在アップロードされているコードは単体ゲームとして完成していますが、オンライン対応には大規模な改修が必要です。
+
+一番早い方法
+
+今の public/index.html を GitHub に入れて、
+
+その後
+
+server.js
+index.html 前半
+index.html 後半
+
+の3回に分けて完成版を作る
+
+という方法です。
+
+まず確認したいこと
+
+オンライン対戦は次のどちらを想定していますか？
+
+A
+
+自分の盤面
+相手の盤面
+
+を横に並べて表示
+
+（以前作ったスイカゲーム方式）
+
+B
+
+1つの盤面だけ表示
+相手のスコアだけ表示
+お邪魔玉を送り合う
+
+（ぷよぷよ・テトリス系）
+
+どちらにするかで設計が大きく変わります。まず A か B を教えてください。
+
+Aです
+
+Aならできます。
+
+完成イメージは以前のように
+
+┌─────────────┬─────────────┐
+│   自分      │    相手     │
+│             │             │
+│  Number     │  Number     │
+│ Merge Game  │ Merge Game  │
+│             │             │
+└─────────────┴─────────────┘
+
+です。
+
+追加する機能
+
+✅ 自分の盤面表示
+
+✅ 相手の盤面表示
+
+✅ ボール位置同期
+
+✅ スコア同期
+
+✅ ルームID
+
+✅ Render対応
+
+ただし今の Number Merge Game はかなり大きいので、
+
+一度に全文を出すのではなく、
+
+Step1
+
+まず現在の
+
+server.js
+
+をルーム対応版に変更
+
+Step2
+
+次に
+
+index.html
+
+へ
+
+const socket = io();
+const roomId = prompt("ルームID");
+
+などを追加
+
+Step3
+
+ボール配列を同期
+
+という順で進めた方が確実です。
+
+まずは現在 Render で動いている 最新の server.js を確認したいです。
+
+今 GitHub にある server.js は次のコードで合っていますか？
+
+const express = require("express");
+
+const app = express();
+
+const http = require("http").createServer(app);
+
+const io = require("socket.io")(http);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+
+    console.log("接続");
+
+    socket.on("gameState", (data) => {
+
+        socket.broadcast.emit(
+            "enemyState",
+            data
+        );
+
+    });
+
+    socket.on("disconnect", () => {
+
+        console.log("切断");
+
+    });
+
+});
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", () => {
+
+    console.log("Server Start");
+
+});
+
+もしこれで合っていれば、次に貼り付けるだけの ルーム対応 server.js 完成版 を出します。
+
+const express = require("express");
+
+const app = express();
+
+const http = require("http").createServer(app);
+
+const io = require("socket.io")(http);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+
+console.log("接続");
+
+socket.on("gameState", (data) => {
+
+    socket.broadcast.emit(
+        "enemyState",
+        data
+    );
+
+});
+
+socket.on("disconnect", () => {
+
+    console.log("切断");
+
+});
+
+
+});
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", () => {
+
+console.log("Server Start");
+
+
+});
+
+はい、その server.js をまずルーム対応版に置き換えましょう。
+
+以下を そのまま全部コピーして server.js に貼り付け てください。
+
+const express = require("express");
+
+const app = express();
+
+const http = require("http").createServer(app);
+
+const io = require("socket.io")(http);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+
+    console.log("接続");
+
+    socket.on("joinRoom", (roomId) => {
+
+        socket.join(roomId);
+
+        socket.roomId = roomId;
+
+        console.log("参加:", roomId);
+
+    });
+
+    socket.on("gameState", (data) => {
+
+        if (socket.roomId) {
+
+            socket.to(socket.roomId).emit(
+                "enemyState",
+                data
+            );
+
+        }
+
+    });
+
+    socket.on("disconnect", () => {
+
+        console.log("切断");
+
+    });
+
+});
+
+const PORT = process.env.PORT || 8080;
+
+http.listen(PORT, "0.0.0.0", () => {
+
+    console.log("Server Start");
+
+});
+
+その後
+
+git add .
+git commit -m "room support"
+git push
+
+または GitHub の Web 画面で server.js を編集して Commit changes でもOKです。
+
+次に index.html に
+
+const socket = io();
+
+const roomId = prompt("ルームIDを入力");
+
+socket.emit(
+    "joinRoom",
+    roomId
+);
+
+を組み込みます。
+
+ただし、あなたの Number Merge Game の index.html は非常に長いので、次は ファイル全体ではなく
+
+const canvas =
+    document.getElementById(
+        "gameCanvas"
+    );
+
+から始まる部分の先頭100行くらいを
+送ってください。
+
+そこに Socket.IO と「自分／相手」の2画面表示を壊さずに組み込む位置を示して、貼り付けるコードを作ります。
+
+添付ファイルを含むチャットでの Free の制限に達しました
+ファイルの使用を続けるには、今すぐアップグレードするか、明日の 11:28までお待ちください。またはファイルなしでチャットすることができます。
+新しいチャット
+無料オファーを受け取る
+
+<title>Number Merge Game</title>
+
+<style>
+
+    body {
+        margin: 0;
+        background: linear-gradient( 180deg, #fff6d6 0%, #ffd9ec 100% );
+        overflow: hidden;
+        font-family: sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    canvas {
+        background: #ffffff;
+        border: 4px solid #333;
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+</style>
+<canvas id="gameCanvas"
+        width="720"
+        height="820">
+</canvas>
+
+<script>
+
+    const canvas =
+        document.getElementById(
+            "gameCanvas"
+        );
+
+    const ctx =
+        canvas.getContext("2d");
+
+    const WIDTH =
+        canvas.width;
+
+    const HEIGHT =
+        canvas.height;
+
+    // 盤面
+    const FIELD_X = 190;
+    const FIELD_WIDTH = 500;
+
+    // 重力
+    const gravity = 0.75;
+
+    // ゲームオーバーライン
+    const lineY = 120;
+
+    let gameOver = false;
+    let score = 0;
+
+    // 同じ場所連打判定
+    let lastDropX = -9999;
+    let samePlaceCount = 0;
+
+    // サイズ（11段階）
+    const radiuses = [
+
+        0,
+        22,
+        30,
+        40,
+        52,
+        66,
+        82,
+        100,
+        122,
+        148,
+        178,
+        212
+    ];
+
+    // 色
+    const colors = [
+
+        "#ddd",
+        "#ff9aa2",
+        "#ffd97d",
+        "#f9f871",
+        "#8fd3ff",
+        "#98f5a5",
+        "#caa6ff",
+        "#ff9de1",
+        "#6fdd8b",
+        "#ffb86b",
+        "#7dd3fc",
+        "#f472b6"
+    ];
+
+    class Ball {
+
+        constructor(
+            x,
+            y,
+            level
+        ) {
+
+            this.x = x;
+            this.y = y;
+
+            this.level = level;
+
+            this.radius =
+                radiuses[level];
+
+            this.mass =
+                Math.pow(
+                    level,
+                    3
+                );
+
+            this.vx = 0;
+            this.vy = 0;
+
+            this.isNew = true;
+
+            this.spawnTimer = 15;
+
+            // お邪魔玉判定
+            this.isObstacle = false;
+        }
+
+        update() {
+
+            if (
+                this.spawnTimer > 0
+            ) {
+                this.spawnTimer--;
+            }
+
+            this.vy += gravity;
+
+            // 落下速度制限
+            if (
+                this.vy > 10
+            ) {
+                this.vy = 10;
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            const friction =
+                0.92 +
+                this.level *
+                0.008;
+
+            this.vx *= friction;
+
+            if (
+
+                Math.abs(
+                    this.vx
+                ) < 0.05
+
+                &&
+
+                Math.abs(
+                    this.vy
+                ) < 0.05
+            ) {
+
+                this.vx = 0;
+                this.vy = 0;
+            }
+
+            // 床
+            if (
+
+                this.y +
+                this.radius >
+
+                HEIGHT
+
+            ) {
+
+                this.y =
+                    HEIGHT -
+                    this.radius;
+
+                this.vy *= -0.05;
+
+                this.vx *= 0.85;
+
+                if (
+                    Math.abs(
+                        this.vy
+                    ) < 0.1
+                ) {
+                    this.vy = 0;
+                }
+            }
+
+            // 左壁
+            if (
+
+                this.x -
+                this.radius
+
+                <
+
+                FIELD_X
+
+            ) {
+
+                this.x =
+                    FIELD_X +
+                    this.radius;
+
+                this.vx *= 0.2;
+            }
+
+            // 右壁
+            if (
+
+                this.x +
+                this.radius
+
+                >
+
+                FIELD_X +
+                FIELD_WIDTH
+
+            ) {
+
+                this.x =
+                    FIELD_X +
+                    FIELD_WIDTH -
+                    this.radius;
+
+                this.vx *= 0.2;
+            }
+
+            if (
+
+                this.y -
+                this.radius
+
+                >
+
+                lineY
+
+            ) {
+                this.isNew = false;
+            }
+        }
+
+        draw() {
+
+            ctx.beginPath();
+
+            ctx.fillStyle =
+                this.isObstacle
+                    ? "#444444"
+                    : colors[
+                    this.level
+                    ];
+
+            ctx.ellipse(
+                this.x,
+                this.y,
+                this.radius,
+                this.radius * 0.95,
+                0,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+            ctx.beginPath();
+
+            ctx.fillStyle =
+                "rgba(255,255,255,0.35)";
+
+            ctx.arc(
+                this.x -
+                this.radius * 0.3,
+
+                this.y -
+                this.radius * 0.3,
+
+                this.radius * 0.25,
+
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+
+            ctx.textAlign =
+                "center";
+
+            ctx.textBaseline =
+                "middle";
+
+            ctx.font =
+                `${this.radius * 0.7}px sans-serif`;
+
+            if (this.isObstacle) {
+
+                ctx.fillStyle =
+                    "white";
+
+                ctx.fillText(
+                    "X",
+                    this.x,
+                    this.y
+                );
+
+            } else {
+
+                ctx.fillStyle =
+                    "#5c4033";
+
+                ctx.fillText(
+                    this.level,
+                    this.x,
+                    this.y
+                );
+            }
+        }
+    }
+
+    let balls = [];
+
+    let currentX =
+        FIELD_X +
+        FIELD_WIDTH / 2;
+
+    let nextLevel =
+        randomLevel();
+
+    function randomLevel() {
+
+        const r =
+            Math.random();
+
+        if (r < 0.40) return 1;
+        if (r < 0.75) return 2;
+        if (r < 0.95) return 3;
+
+        return 4;
+    }
+
+    canvas.addEventListener(
+        "mousemove",
+        e => {
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+            currentX =
+                e.clientX -
+                rect.left;
+        }
+    );
+
+    canvas.addEventListener(
+        "click",
+        () => {
+
+            if (gameOver) return;
+
+            const radius =
+                radiuses[nextLevel];
+
+            let spawnX =
+                currentX;
+
+            if (
+                spawnX <
+                FIELD_X + radius
+            ) {
+                spawnX =
+                    FIELD_X + radius;
+            }
+
+            if (
+                spawnX >
+                FIELD_X +
+                FIELD_WIDTH -
+                radius
+            ) {
+                spawnX =
+                    FIELD_X +
+                    FIELD_WIDTH -
+                    radius;
+            }
+
+            if (
+                Math.abs(
+                    spawnX -
+                    lastDropX
+                ) < 25
+            ) {
+                samePlaceCount++;
+            } else {
+                samePlaceCount = 0;
+            }
+
+            lastDropX = spawnX;
+
+            if (
+                samePlaceCount >= 5
+            ) {
+
+                const obstacleLevel =
+                    randomLevel();
+
+                const obstacleRadius =
+                    radiuses[
+                    obstacleLevel
+                    ];
+
+                const randomX =
+                    FIELD_X +
+                    obstacleRadius +
+                    Math.random() *
+                    (
+                        FIELD_WIDTH -
+                        obstacleRadius * 2
+                    );
+
+                const ojama =
+                    new Ball(
+                        randomX,
+                        50,
+                        obstacleLevel
+                    );
+
+                ojama.isObstacle =
+                    true;
+
+                balls.push(
+                    ojama
+                );
+
+                samePlaceCount = 0;
+
+            } else {
+
+                const ball =
+                    new Ball(
+                        spawnX,
+                        50,
+                        nextLevel
+                    );
+
+                balls.push(ball);
+            }
+
+            nextLevel =
+                randomLevel();
+        }
+    );
+
+    function collide(a, b) {
+
+        const dx =
+            b.x - a.x;
+
+        const dy =
+            b.y - a.y;
+
+        const dist =
+            Math.sqrt(
+                dx * dx +
+                dy * dy
+            );
+
+        return (
+            dist <
+            (
+                a.radius +
+                b.radius
+            ) * 0.98
+        );
+    }
+
+    function getScore(level) {
+
+        const scores = {
+
+            1: 10,
+            2: 30,
+            3: 60,
+            4: 100,
+            5: 200,
+            6: 400,
+            7: 800,
+            8: 2000,
+            9: 5000,
+            10: 12000,
+            11: 30000
+        };
+
+        return scores[level] || 0;
+    }
+
+    function mergeBalls() {
+
+        for (
+            let i = 0;
+            i < balls.length;
+            i++
+        ) {
+
+            for (
+                let j = i + 1;
+                j < balls.length;
+                j++
+            ) {
+
+                const a =
+                    balls[i];
+
+                const b =
+                    balls[j];
+
+                if (
+                    a.spawnTimer > 0 ||
+                    b.spawnTimer > 0
+                ) {
+                    continue;
+                }
+
+                if (
+                    !collide(a, b)
+                ) {
+                    continue;
+                }
+
+                const dx =
+                    b.x - a.x;
+
+                const dy =
+                    b.y - a.y;
+
+                const dist =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+                if (
+                    dist === 0
+                ) {
+                    continue;
+                }
+
+                const overlap =
+                    (
+                        a.radius +
+                        b.radius -
+                        dist
+                    ) * 1.15;
+
+                const nx =
+                    dx / dist;
+
+                const ny =
+                    dy / dist;
+
+                const push =
+                    overlap * 0.4;
+
+                const totalMass =
+                    a.mass +
+                    b.mass;
+
+                const ratioA =
+                    b.mass /
+                    totalMass;
+
+                const ratioB =
+                    a.mass /
+                    totalMass;
+                a.x -=
+                    nx *
+                    push *
+                    ratioA;
+
+                a.y -=
+                    ny *
+                    push *
+                    ratioA;
+
+                b.x +=
+                    nx *
+                    push *
+                    ratioB;
+
+                b.y +=
+                    ny *
+                    push *
+                    ratioB;
+
+                a.vx -=
+                    nx *
+                    0.03 *
+                    ratioA;
+
+                b.vx +=
+                    nx *
+                    0.03 *
+                    ratioB;
+
+                a.vy *= 0.92;
+                b.vy *= 0.92;
+
+                if (
+                    a.isObstacle ||
+                    b.isObstacle
+                ) {
+                    continue;
+                }
+
+                if (
+                    a.level ===
+                    b.level
+                ) {
+
+                    if (
+                        a.level === 11
+                    ) {
+
+                        score +=
+                            10000;
+
+                        balls = [];
+
+                        return;
+                    }
+
+                    const newBall =
+                        new Ball(
+                            (
+                                a.x +
+                                b.x
+                            ) / 2,
+
+                            (
+                                a.y +
+                                b.y
+                            ) / 2,
+
+                            a.level + 1
+                        );
+
+                    newBall.vy = -2;
+
+                    balls.splice(
+                        j,
+                        1
+                    );
+
+                    balls.splice(
+                        i,
+                        1
+                    );
+
+                    balls.push(
+                        newBall
+                    );
+
+                    score +=
+                        getScore(
+                            newBall.level
+                        );
+
+                    return;
+                }
+            }
+        }
+    }
+
+    function checkGameOver() {
+
+        for (
+            const ball
+            of balls
+        ) {
+
+            if (
+                ball.isNew
+            ) {
+                continue;
+            }
+
+            if (
+                ball.y -
+                ball.radius <
+                lineY
+            ) {
+                gameOver = true;
+            }
+        }
+    }
+
+    function drawBackgroundDecor() {
+
+        ctx.fillStyle =
+            "rgba(255,255,255,0.25)";
+
+        for (
+            let i = 0;
+            i < 8;
+            i++
+        ) {
+
+            ctx.beginPath();
+
+            ctx.arc(
+                60 + i * 90,
+                80 +
+                (i % 2) * 40,
+                30,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+        }
+    }
+
+    function drawField() {
+
+        ctx.fillStyle =
+            "#fffdf4";
+
+        ctx.fillRect(
+            FIELD_X,
+            0,
+            FIELD_WIDTH,
+            HEIGHT
+        );
+    }
+
+    function drawLine() {
+
+        ctx.strokeStyle =
+            "#ff7b7b";
+
+        ctx.lineWidth = 4;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            FIELD_X,
+            lineY
+        );
+
+        ctx.lineTo(
+            FIELD_X +
+            FIELD_WIDTH,
+            lineY
+        );
+
+        ctx.stroke();
+    }
+
+    function drawScore() {
+
+        ctx.fillStyle =
+            "#fff8ee";
+
+        ctx.fillRect(
+            20,
+            20,
+            140,
+            90
+        );
+
+        ctx.strokeStyle =
+            "#d8b98f";
+
+        ctx.lineWidth = 4;
+
+        ctx.strokeRect(
+            20,
+            20,
+            140,
+            90
+        );
+
+        ctx.fillStyle =
+            "#6b4f3f";
+
+        ctx.font =
+            "24px sans-serif";
+
+        ctx.textAlign =
+            "left";
+
+        ctx.fillText(
+            "SCORE",
+            35,
+            50
+        );
+
+        ctx.font =
+            "32px sans-serif";
+
+        ctx.fillText(
+            score,
+            35,
+            88
+        );
+    }
+
+    function drawNext() {
+
+        ctx.fillStyle =
+            "#fff8ee";
+
+        ctx.fillRect(
+            20,
+            140,
+            140,
+            170
+        );
+
+        ctx.strokeStyle =
+            "#d8b98f";
+
+        ctx.lineWidth = 4;
+
+        ctx.strokeRect(
+            20,
+            140,
+            140,
+            170
+        );
+
+        ctx.fillStyle =
+            "#6b4f3f";
+
+        ctx.font =
+            "24px sans-serif";
+
+        ctx.textAlign =
+            "center";
+
+        ctx.fillText(
+            "NEXT",
+            90,
+            180
+        );
+
+        const r =
+            radiuses[
+            nextLevel
+            ] * 0.6;
+
+        ctx.beginPath();
+
+        ctx.fillStyle =
+            colors[
+            nextLevel
+            ];
+
+        ctx.arc(
+            90,
+            245,
+            r,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle =
+            "#5c4033";
+
+        ctx.font =
+            "26px sans-serif";
+
+        ctx.fillText(
+            nextLevel,
+            90,
+            245
+        );
+    }
+
+    function drawDropPreview() {
+
+        const r =
+            radiuses[
+            nextLevel
+            ];
+
+        ctx.globalAlpha =
+            0.3;
+
+        ctx.beginPath();
+
+        ctx.fillStyle =
+            colors[
+            nextLevel
+            ];
+
+        ctx.arc(
+            currentX,
+            50,
+            r,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        ctx.globalAlpha =
+            1;
+    }
+
+    function update() {
+
+        if (gameOver) return;
+
+        for (
+            const ball
+            of balls
+        ) {
+            ball.update();
+        }
+
+        for (
+            let k = 0;
+            k < 10;
+            k++
+        ) {
+            mergeBalls();
+        }
+
+        checkGameOver();
+    }
+
+    function draw() {
+
+        ctx.clearRect(
+            0,
+            0,
+            WIDTH,
+            HEIGHT
+        );
+
+        drawBackgroundDecor();
+        drawField();
+        drawLine();
+        drawScore();
+        drawNext();
+        drawDropPreview();
+
+        for (
+            const ball
+            of balls
+        ) {
+            ball.draw();
+        }
+
+        if (gameOver) {
+
+            ctx.fillStyle =
+                "rgba(0,0,0,0.55)";
+
+            ctx.fillRect(
+                FIELD_X,
+                0,
+                FIELD_WIDTH,
+                HEIGHT
+            );
+
+            ctx.fillStyle =
+                "white";
+
+            ctx.font =
+                "50px sans-serif";
+
+            ctx.textAlign =
+                "center";
+
+            ctx.fillText(
+                "GAME OVER",
+                FIELD_X +
+                FIELD_WIDTH / 2,
+                HEIGHT / 2
+            );
+        }
+    }
+
+    function loop() {
+
+        update();
+        draw();
+
+        requestAnimationFrame(
+            loop
+        );
+    }
+
+    loop();
+
+</script>
+閉じる
