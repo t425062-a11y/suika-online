@@ -41,6 +41,9 @@
 
     <script>
         const socket = io();
+        
+        const room = prompt("ルーム名を入力してください");
+        socket.emit("joinRoom", room);
 
         const canvas =
             document.getElementById(
@@ -1020,6 +1023,7 @@
 
         loop();
 
+        
     </script>
 </body>
     <script src="/socket.io/socket.io.js"></script>
