@@ -1,52 +1,35 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
-
-const http = require("http").createServer(app);
-
-const io = require("socket.io")(http);
+const server = http.createServer(app);
+const io = new Server(server);
 
 app.use(express.static("public"));
 
 io.on("connection", (socket) => {
+    console.log("接続:", socket.id);
 
-    console.log("接続");
-
-    socket.on("joinRoom", (roomId) => {
-
-        socket.join(roomId);
-
-        socket.roomId = roomId;
-
-        console.log("参加:", roomId);
-
+    socket.on("joinRoom", (room) => {
+        socket.join(room);
+        socket.roomId = room;
+        console.log(`${socket.id} joined ${room}`);
     });
 
     socket.on("gameState", (data) => {
-
         if (socket.roomId) {
-
-            socket.to(socket.roomId).emit(
-                "enemyState",
-                data
-            );
-
+            socket.to(socket.roomId).emit("enemyState", data);
         }
-
     });
 
     socket.on("disconnect", () => {
-
-        console.log("切断");
-
+        console.log("切断:", socket.id);
     });
-
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
-http.listen(PORT, "0.0.0.0", () => {
-
-    console.log("Server Start");
-
+server.listen(PORT, () => {
+    console.log("Server started: http://localhost:" + PORT);
 });
