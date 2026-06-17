@@ -53,8 +53,8 @@
             canvas.height;
 
         // 盤面
-        const FIELD_X = 190;
-        const FIELD_WIDTH = 500;
+        const FIELD_WIDTH = Math.min(500, WIDTH - 40);
+        const FIELD_X = (WIDTH - FIELD_WIDTH) / 2;
 
         // 重力
         const gravity = 0.75;
