@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Number Merge Game</title>
+
+    <style>
+
+        body {
+            margin: 0;
+            background: linear-gradient( 180deg, #fff6d6 0%, #ffd9ec 100% );
+            overflow: hidden;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+        width: min(95vw, 720px);
+        height: auto;
+
+        background: #ffffff;
+        border: 4px solid #333;
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="gameCanvas"
+            width="720"
+            height="820">
+    </canvas>
+
+    <script>
+        const socket = io();
+        
+        const room = prompt("ルーム名を入力してください");
+        socket.emit("joinRoom", room);
+
+        const canvas =
+            document.getElementById(
+                "gameCanvas"
+            );
+
+        const ctx =
+            canvas.getContext("2d");
+
+        const WIDTH =
+            canvas.width;
+
+        const HEIGHT =
+            canvas.height;
+
+        // 盤面
+        const FIELD_WIDTH = Math.min(500, WIDTH - 40);
+        const FIELD_X = (WIDTH - FIELD_WIDTH) / 2;
+
+        // 重力
+        const gravity = 0.75;
+
+        // ゲームオーバーライン
+        const lineY = 120;
+
+        let gameOver = false;
+        let score = 0;
+
+        // 同じ場所連打判定
+        let lastDropX = -9999;
+        let samePlaceCount = 0;
+
+        // サイズ（11段階）
+        const radiuses = [
+
+            0,
+            22,
+            30,
+            40,
+            52,
+            66,
+            82,
+            100,
+            122,
+            148,
+            178,
+            212
+        ];
+
+        // 色
+        const colors = [
+
+            "#ddd",
+            "#ff9aa2",
+            "#ffd97d",
+            "#f9f871",
+            "#8fd3ff",
+            "#98f5a5",
+            "#caa6ff",
+            "#ff9de1",
+            "#6fdd8b",
+            "#ffb86b",
+            "#7dd3fc",
+            "#f472b6"
+        ];
+
+        class Ball {
+
+            constructor(
+                x,
+                y,
+                level
+            ) {
+
+                this.x = x;
+                this.y = y;
+
+                this.level = level;
+
+                this.radius =
+                    radiuses[level];
+
+                this.mass =
+                    Math.pow(
+                        level,
+                        3
+                    );
+
+                this.vx = 0;
+                this.vy = 0;
+
+                this.isNew = true;
+
+                this.spawnTimer = 15;
+
+                // お邪魔玉判定
+                this.isObstacle = false;
+            }
+
+            update() {
+
+                if (
+                    this.spawnTimer > 0
+                ) {
+                    this.spawnTimer--;
+                }
+
+                this.vy += gravity;
+
+                // 落下速度制限
+                if (
+                    this.vy > 10
+                ) {
+                    this.vy = 10;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                const friction =
+                    0.92 +
+                    this.level *
+                    0.008;
+
+                this.vx *= friction;
+
+                if (
+
+                    Math.abs(
+                        this.vx
+                    ) < 0.05
+
+                    &&
+
+                    Math.abs(
+                        this.vy
+                    ) < 0.05
+                ) {
+
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+
+                // 床
+                if (
+
+                    this.y +
+                    this.radius >
+
+                    HEIGHT
+
+                ) {
+
+                    this.y =
+                        HEIGHT -
+                        this.radius;
+
+                    this.vy *= -0.05;
+
+                    this.vx *= 0.85;
+
+                    if (
+                        Math.abs(
+                            this.vy
+                        ) < 0.1
+                    ) {
+                        this.vy = 0;
+                    }
+                }
+
+                // 左壁
+                if (
+
+                    this.x -
+                    this.radius
+
+                    <
+
+                    FIELD_X
+
+                ) {
+
+                    this.x =
+                        FIELD_X +
+                        this.radius;
+
+                    this.vx *= 0.2;
+                }
+
+                // 右壁
+                if (
+
+                    this.x +
+                    this.radius
+
+                    >
+
+                    FIELD_X +
+                    FIELD_WIDTH
+
+                ) {
+
+                    this.x =
+                        FIELD_X +
+                        FIELD_WIDTH -
+                        this.radius;
+
+                    this.vx *= 0.2;
+                }
+
+                if (
+
+                    this.y -
+                    this.radius
+
+                    >
+
+                    lineY
+
+                ) {
+                    this.isNew = false;
+                }
+            }
+
+            draw() {
+
+                ctx.beginPath();
+
+                ctx.fillStyle =
+                    this.isObstacle
+                        ? "#444444"
+                        : colors[
+                        this.level
+                        ];
+
+                ctx.ellipse(
+                    this.x,
+                    this.y,
+                    this.radius,
+                    this.radius * 0.95,
+                    0,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+                ctx.beginPath();
+
+                ctx.fillStyle =
+                    "rgba(255,255,255,0.35)";
+
+                ctx.arc(
+                    this.x -
+                    this.radius * 0.3,
+
+                    this.y -
+                    this.radius * 0.3,
+
+                    this.radius * 0.25,
+
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+
+                ctx.textAlign =
+                    "center";
+
+                ctx.textBaseline =
+                    "middle";
+
+                ctx.font =
+                    `${this.radius * 0.7}px sans-serif`;
+
+                if (this.isObstacle) {
+
+                    ctx.fillStyle =
+                        "white";
+
+                    ctx.fillText(
+                        "X",
+                        this.x,
+                        this.y
+                    );
+
+                } else {
+
+                    ctx.fillStyle =
+                        "#5c4033";
+
+                    ctx.fillText(
+                        this.level,
+                        this.x,
+                        this.y
+                    );
+                }
+            }
+        }
+
+        let balls = [];
+
+        let currentX =
+            FIELD_X +
+            FIELD_WIDTH / 2;
+
+        let nextLevel =
+            randomLevel();
+
+        function randomLevel() {
+
+            const r =
+                Math.random();
+
+            if (r < 0.40) return 1;
+            if (r < 0.75) return 2;
+            if (r < 0.95) return 3;
+
+            return 4;
+        }
+
+        canvas.addEventListener(
+            "mousemove",
+            e => {
+
+                const rect =
+                    canvas.getBoundingClientRect();
+
+                currentX =
+                    e.clientX -
+                    rect.left;
+            }
+        );
+
+        canvas.addEventListener(
+            "click",
+            () => {
+
+                if (gameOver) return;
+
+                const radius =
+                    radiuses[nextLevel];
+
+                let spawnX =
+                    currentX;
+
+                if (
+                    spawnX <
+                    FIELD_X + radius
+                ) {
+                    spawnX =
+                        FIELD_X + radius;
+                }
+
+                if (
+                    spawnX >
+                    FIELD_X +
+                    FIELD_WIDTH -
+                    radius
+                ) {
+                    spawnX =
+                        FIELD_X +
+                        FIELD_WIDTH -
+                        radius;
+                }
+
+                if (
+                    Math.abs(
+                        spawnX -
+                        lastDropX
+                    ) < 25
+                ) {
+                    samePlaceCount++;
+                } else {
+                    samePlaceCount = 0;
+                }
+
+                lastDropX = spawnX;
+
+                if (
+                    samePlaceCount >= 5
+                ) {
+
+                    const obstacleLevel =
+                        randomLevel();
+
+                    const obstacleRadius =
+                        radiuses[
+                        obstacleLevel
+                        ];
+
+                    const randomX =
+                        FIELD_X +
+                        obstacleRadius +
+                        Math.random() *
+                        (
+                            FIELD_WIDTH -
+                            obstacleRadius * 2
+                        );
+
+                    const ojama =
+                        new Ball(
+                            randomX,
+                            50,
+                            obstacleLevel
+                        );
+
+                    ojama.isObstacle =
+                        true;
+
+                    balls.push(
+                        ojama
+                    );
+
+                    samePlaceCount = 0;
+
+                } else {
+
+                    const ball =
+                        new Ball(
+                            spawnX,
+                            50,
+                            nextLevel
+                        );
+
+                    balls.push(ball);
+                }
+
+                nextLevel =
+                    randomLevel();
+            }
+        );
+
+        function collide(a, b) {
+
+            const dx =
+                b.x - a.x;
+
+            const dy =
+                b.y - a.y;
+
+            const dist =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+            return (
+                dist <
+                (
+                    a.radius +
+                    b.radius
+                ) * 0.98
+            );
+        }
+
+        function getScore(level) {
+
+            const scores = {
+
+                1: 10,
+                2: 30,
+                3: 60,
+                4: 100,
+                5: 200,
+                6: 400,
+                7: 800,
+                8: 2000,
+                9: 5000,
+                10: 12000,
+                11: 30000
+            };
+
+            return scores[level] || 0;
+        }
+
+        function mergeBalls() {
+
+            for (
+                let i = 0;
+                i < balls.length;
+                i++
+            ) {
+
+                for (
+                    let j = i + 1;
+                    j < balls.length;
+                    j++
+                ) {
+
+                    const a =
+                        balls[i];
+
+                    const b =
+                        balls[j];
+
+                    if (
+                        a.spawnTimer > 0 ||
+                        b.spawnTimer > 0
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        !collide(a, b)
+                    ) {
+                        continue;
+                    }
+
+                    const dx =
+                        b.x - a.x;
+
+                    const dy =
+                        b.y - a.y;
+
+                    const dist =
+                        Math.sqrt(
+                            dx * dx +
+                            dy * dy
+                        );
+
+                    if (
+                        dist === 0
+                    ) {
+                        continue;
+                    }
+
+                    const overlap =
+                        (
+                            a.radius +
+                            b.radius -
+                            dist
+                        ) * 1.15;
+
+                    const nx =
+                        dx / dist;
+
+                    const ny =
+                        dy / dist;
+
+                    const push =
+                        overlap * 0.4;
+
+                    const totalMass =
+                        a.mass +
+                        b.mass;
+
+                    const ratioA =
+                        b.mass /
+                        totalMass;
+
+                    const ratioB =
+                        a.mass /
+                        totalMass;
+                    a.x -=
+                        nx *
+                        push *
+                        ratioA;
+
+                    a.y -=
+                        ny *
+                        push *
+                        ratioA;
+
+                    b.x +=
+                        nx *
+                        push *
+                        ratioB;
+
+                    b.y +=
+                        ny *
+                        push *
+                        ratioB;
+
+                    a.vx -=
+                        nx *
+                        0.03 *
+                        ratioA;
+
+                    b.vx +=
+                        nx *
+                        0.03 *
+                        ratioB;
+
+                    a.vy *= 0.92;
+                    b.vy *= 0.92;
+
+                    if (
+                        a.isObstacle ||
+                        b.isObstacle
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        a.level ===
+                        b.level
+                    ) {
+
+                        if (
+                            a.level === 11
+                        ) {
+
+                            score +=
+                                10000;
+
+                            balls = [];
+
+                            return;
+                        }
+
+                        const newBall =
+                            new Ball(
+                                (
+                                    a.x +
+                                    b.x
+                                ) / 2,
+
+                                (
+                                    a.y +
+                                    b.y
+                                ) / 2,
+
+                                a.level + 1
+                            );
+
+                        newBall.vy = -2;
+
+                        balls.splice(
+                            j,
+                            1
+                        );
+
+                        balls.splice(
+                            i,
+                            1
+                        );
+
+                        balls.push(
+                            newBall
+                        );
+
+                        score +=
+                            getScore(
+                                newBall.level
+                            );
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        function checkGameOver() {
+
+            for (
+                const ball
+                of balls
+            ) {
+
+                if (
+                    ball.isNew
+                ) {
+                    continue;
+                }
+
+                if (
+                    ball.y -
+                    ball.radius <
+                    lineY
+                ) {
+                    gameOver = true;
+                }
+            }
+        }
+
+        function drawBackgroundDecor() {
+
+            ctx.fillStyle =
+                "rgba(255,255,255,0.25)";
+
+            for (
+                let i = 0;
+                i < 8;
+                i++
+            ) {
+
+                ctx.beginPath();
+
+                ctx.arc(
+                    60 + i * 90,
+                    80 +
+                    (i % 2) * 40,
+                    30,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+            }
+        }
+
+        function drawField() {
+
+            ctx.fillStyle =
+                "#fffdf4";
+
+            ctx.fillRect(
+                FIELD_X,
+                0,
+                FIELD_WIDTH,
+                HEIGHT
+            );
+        }
+
+        function drawLine() {
+
+            ctx.strokeStyle =
+                "#ff7b7b";
+
+            ctx.lineWidth = 4;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                FIELD_X,
+                lineY
+            );
+
+            ctx.lineTo(
+                FIELD_X +
+                FIELD_WIDTH,
+                lineY
+            );
+
+            ctx.stroke();
+        }
+
+        function drawScore() {
+
+            ctx.fillStyle =
+                "#fff8ee";
+
+            ctx.fillRect(
+                20,
+                20,
+                140,
+                90
+            );
+
+            ctx.strokeStyle =
+                "#d8b98f";
+
+            ctx.lineWidth = 4;
+
+            ctx.strokeRect(
+                20,
+                20,
+                140,
+                90
+            );
+
+            ctx.fillStyle =
+                "#6b4f3f";
+
+            ctx.font =
+                "24px sans-serif";
+
+            ctx.textAlign =
+                "left";
+
+            ctx.fillText(
+                "SCORE",
+                35,
+                50
+            );
+
+            ctx.font =
+                "32px sans-serif";
+
+            ctx.fillText(
+                score,
+                35,
+                88
+            );
+        }
+
+        function drawNext() {
+
+            ctx.fillStyle =
+                "#fff8ee";
+
+            ctx.fillRect(
+                20,
+                140,
+                140,
+                170
+            );
+
+            ctx.strokeStyle =
+                "#d8b98f";
+
+            ctx.lineWidth = 4;
+
+            ctx.strokeRect(
+                20,
+                140,
+                140,
+                170
+            );
+
+            ctx.fillStyle =
+                "#6b4f3f";
+
+            ctx.font =
+                "24px sans-serif";
+
+            ctx.textAlign =
+                "center";
+
+            ctx.fillText(
+                "NEXT",
+                90,
+                180
+            );
+
+            const r =
+                radiuses[
+                nextLevel
+                ] * 0.6;
+
+            ctx.beginPath();
+
+            ctx.fillStyle =
+                colors[
+                nextLevel
+                ];
+
+            ctx.arc(
+                90,
+                245,
+                r,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+
+            ctx.fillStyle =
+                "#5c4033";
+
+            ctx.font =
+                "26px sans-serif";
+
+            ctx.fillText(
+                nextLevel,
+                90,
+                245
+            );
+        }
+
+        function drawDropPreview() {
+
+            const r =
+                radiuses[
+                nextLevel
+                ];
+
+            ctx.globalAlpha =
+                0.3;
+
+            ctx.beginPath();
+
+            ctx.fillStyle =
+                colors[
+                nextLevel
+                ];
+
+            ctx.arc(
+                currentX,
+                50,
+                r,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+
+            ctx.globalAlpha =
+                1;
+        }
+
+        function update() {
+
+            if (gameOver) return;
+
+            for (
+                const ball
+                of balls
+            ) {
+                ball.update();
+            }
+
+            for (
+                let k = 0;
+                k < 10;
+                k++
+            ) {
+                mergeBalls();
+            }
+
+            checkGameOver();
+        }
+
+        function draw() {
+
+            ctx.clearRect(
+                0,
+                0,
+                WIDTH,
+                HEIGHT
+            );
+
+            drawBackgroundDecor();
+            drawField();
+            drawLine();
+            drawScore();
+            drawNext();
+            drawDropPreview();
+
+            for (
+                const ball
+                of balls
+            ) {
+                ball.draw();
+            }
+
+            if (gameOver) {
+
+                ctx.fillStyle =
+                    "rgba(0,0,0,0.55)";
+
+                ctx.fillRect(
+                    FIELD_X,
+                    0,
+                    FIELD_WIDTH,
+                    HEIGHT
+                );
+
+                ctx.fillStyle =
+                    "white";
+
+                ctx.font =
+                    "50px sans-serif";
+
+                ctx.textAlign =
+                    "center";
+
+                ctx.fillText(
+                    "GAME OVER",
+                    FIELD_X +
+                    FIELD_WIDTH / 2,
+                    HEIGHT / 2
+                );
+            }
+        }
+
+        function loop() {
+
+            update();
+            draw();
+
+            requestAnimationFrame(
+                loop
+            );
+        }
+
+        loop();
+
+        
+    </script>
+</body>
+    <script src="/socket.io/socket.io.js"></script>
+</html>
