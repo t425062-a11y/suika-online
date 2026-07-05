@@ -608,8 +608,13 @@
 
         function dropCurrentBall() {
 
-            if (gameOver) return;
             if (!isMatched()) return;
+
+            if (gameOver) {
+                checkMatchResult();
+                sendGameState();
+                return;
+            }
 
             const radius =
                 radiuses[nextLevel];
@@ -1176,39 +1181,39 @@
         // 自分・相手どちらかがゲームオーバーになった時点で勝敗を決定する
         function checkMatchResult() {
 
-            if (matchResult) {
-                return;
-            }
+            if (matchResult) return;
+            if (!enemyState) return;
 
-            if (!enemyState) {
-                return;
-            }
-
-            // 自分だけゲームオーバー
             if (gameOver && !enemyState.gameOver) {
+
                 matchResult = "LOSE";
                 return;
+
             }
 
-            // 相手だけゲームオーバー
             if (!gameOver && enemyState.gameOver) {
+
                 matchResult = "WIN";
-                gameOver = true;
                 return;
+
             }
 
-            // 両者ゲームオーバー
             if (gameOver && enemyState.gameOver) {
 
                 if (score > enemyState.score) {
+
                     matchResult = "WIN";
-                }
-                else if (score < enemyState.score) {
+
+                } else if (score < enemyState.score) {
+
                     matchResult = "LOSE";
-                }
-                else {
+
+                } else {
+
                     matchResult = "DRAW";
+
                 }
+
             }
         }
 
@@ -1512,47 +1517,101 @@
 
         function update() {
 
-            if (gameOver) return;
-            if (!isMatched()) return;
+            // ==========================
+            // 勝敗表示
+            // ==========================
 
-            for (
-                const ball
-                of balls
-            ) {
-                ball.update();
+            if (gameOver || matchResult) {
+
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.fillRect(
+                    FIELD_X,
+                    0,
+                    FIELD_WIDTH,
+                    HEIGHT
+                );
+
+                ctx.textAlign = "center";
+
+                if (matchResult === "WIN") {
+
+                    ctx.fillStyle = "#ffe066";
+                    ctx.font = "bold 72px sans-serif";
+
+                    ctx.fillText(
+                        "YOU WIN!",
+                        FIELD_X + FIELD_WIDTH / 2,
+                        HEIGHT / 2
+                    );
+
+                }
+                else if (matchResult === "LOSE") {
+
+                    ctx.fillStyle = "#ff7070";
+                    ctx.font = "bold 72px sans-serif";
+
+                    ctx.fillText(
+                        "YOU LOSE",
+                        FIELD_X + FIELD_WIDTH / 2,
+                        HEIGHT / 2
+                    );
+
+                }
+                else if (matchResult === "DRAW") {
+
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 72px sans-serif";
+
+                    ctx.fillText(
+                        "DRAW",
+                        FIELD_X + FIELD_WIDTH / 2,
+                        HEIGHT / 2
+                    );
+
+                }
+                else {
+
+                    ctx.fillStyle = "white";
+                    ctx.font = "60px sans-serif";
+
+                    ctx.fillText(
+                        "GAME OVER",
+                        FIELD_X + FIELD_WIDTH / 2,
+                        HEIGHT / 2
+                    );
+
+                }
+
             }
+            else if (!isMatched()) {
 
-            for (
-                let k = 0;
-                k < 10;
-                k++
-            ) {
-                mergeBalls();
-            }
+                ctx.fillStyle =
+                    "rgba(0,0,0,0.5)";
 
-            checkGameOver();
-            checkMatchResult();
-            sendGameState();
-        }
+                ctx.fillRect(
+                    FIELD_X,
+                    0,
+                    FIELD_WIDTH,
+                    HEIGHT
+                );
 
-        function draw() {
+                ctx.fillStyle = "white";
+                ctx.font = "28px sans-serif";
+                ctx.textAlign = "center";
 
-            ctx.clearRect(
-                0,
-                0,
-                WIDTH,
-                HEIGHT
-            );
+                ctx.fillText(
+                    "待機中...",
+                    FIELD_X + FIELD_WIDTH / 2,
+                    HEIGHT / 2 - 16
+                );
 
-            drawBackgroundDecor();
-            drawField();
-            drawLine();
-            drawScore();
-            drawNext();
-            drawEnemyField();
+                ctx.font = "18px sans-serif";
 
-            if (isMatched()) {
-                drawDropPreview();
+                ctx.fillText(
+                    "対戦相手が参加するとスタートします",
+                    FIELD_X + FIELD_WIDTH / 2,
+                    HEIGHT / 2 + 20
+                );
             }
 
             for (
