@@ -3,17 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Number Merge Game</title>
+    <title>Drop Ocean 🌊</title>
     <style>
+        /* 全体の共通スタイル */
         body {
             margin: 0;
-            background: linear-gradient(180deg, #fff6d6 0%, #ffd9ec 100%);
+            background: linear-gradient(180deg, #e0f7fa 0%, #b2dfdb 100%);
             overflow: hidden;
-            font-family: sans-serif;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            color: #1a365d;
+        }
+
+        /* 🌊 部屋選択（ロビー）画面のスタイル */
+        .lobby-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            border: 4px solid #4dd0e1;
+            border-radius: 24px;
+            padding: 30px;
+            width: min(90vw, 480px);
+            max-height: 85vh;
+            box-shadow: 0 12px 36px rgba(0, 77, 97, 0.15);
+            z-index: 10;
+            box-sizing: border-box;
+        }
+
+        .game-title {
+            font-size: 38px;
+            font-weight: bold;
+            color: #00838f;
+            margin: 0 0 24px 0;
+            text-shadow: 2px 2px 0px #e0f7fa;
+            text-align: center;
+        }
+
+        /* 波打つアニメーション付きのクイックボタン */
+        .ocean-btn-quick {
+            width: 100%;
+            background: linear-gradient(135deg, #0288d1 0%, #00b0ff 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(2, 136, 209, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+            animation: waveMotion 3s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes waveMotion {
+            0%, 100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-4px);
+            }
+        }
+
+        .ocean-btn-quick:hover {
+            box-shadow: 0 8px 20px rgba(2, 136, 209, 0.4);
+        }
+
+        .ocean-btn-quick:active {
+            transform: scale(0.98);
+        }
+
+        /* カスタム部屋作成ボックス */
+        .custom-room-box {
+            width: 100%;
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+            .custom-room-box input {
+                flex: 1;
+                border: 3px solid #b2ebf2;
+                border-radius: 14px;
+                padding: 12px;
+                font-size: 16px;
+                color: #1a365d;
+                background: white;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+
+                .custom-room-box input:focus {
+                    border-color: #00bcd4;
+                }
+
+            .custom-room-box button {
+                background: #ff8a80;
+                color: white;
+                border: none;
+                border-radius: 14px;
+                padding: 0 20px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                box-shadow: 0 4px 10px rgba(255, 138, 128, 0.3);
+                transition: transform 0.2s;
+            }
+
+                .custom-room-box button:hover {
+                    background: #ff5252;
+                }
+
+                .custom-room-box button:active {
+                    transform: scale(0.95);
+                }
+
+        .lobby-subtitle {
+            font-size: 16px;
+            font-weight: bold;
+            align-self: flex-start;
+            margin: 10px 0 8px 0;
+            color: #006064;
+        }
+
+        /* スクロール可能な部屋リスト */
+        .room-list-scroll {
+            width: 100%;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 4px;
+        }
+
+            .room-list-scroll::-webkit-scrollbar {
+                width: 6px;
+            }
+
+            .room-list-scroll::-webkit-scrollbar-thumb {
+                background: #b2ebf2;
+                border-radius: 4px;
+            }
+
+        .room-empty-msg {
+            text-align: center;
+            color: #78909c;
+            font-size: 14px;
+            padding: 20px 0;
+        }
+
+        /* 部屋カードのデザイン */
+        .room-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            border: 2px solid #e0f2f1;
+            border-radius: 14px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+            transition: border-color 0.2s;
+        }
+
+            /* 状態ごとのカード色分け */
+            .room-card.recruiting {
+                border-color: #80cbc4;
+            }
+
+            .room-card.full {
+                border-color: #cfd8dc;
+                background: #f5f7f8;
+                opacity: 0.7;
+            }
+
+        .room-card-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .room-card-name {
+            font-weight: bold;
+            font-size: 15px;
+        }
+
+        .room-card-status {
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .room-card.recruiting .room-card-status {
+            color: #00796b;
+        }
+
+        .room-card.full .room-card-status {
+            color: #78909c;
+        }
+
+        .room-card-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .room-card.recruiting .room-card-btn {
+            background: #26a69a;
+            color: white;
+        }
+
+            .room-card.recruiting .room-card-btn:hover {
+                background: #00796b;
+            }
+
+            .room-card.recruiting .room-card-btn:active {
+                transform: scale(0.95);
+            }
+
+        .room-card.full .room-card-btn {
+            background: #b0bec5;
+            color: white;
+            cursor: not-allowed;
+        }
+
+        /* 🎮 ゲーム（キャンバス）画面のスタイル */
+        #game-screen {
+            display: none; /* 初期状態は非表示 */
         }
 
         canvas {
@@ -24,121 +249,138 @@
             border-radius: 18px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
-
-        .room-panel {
-            position: fixed;
-            top: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            background: rgba(255, 248, 238, 0.92);
-            border: 3px solid #d8b98f;
-            border-radius: 8px;
-            padding: 8px;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-            z-index: 2;
-        }
-
-            .room-panel input {
-                width: 130px;
-                border: 2px solid #d8b98f;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 16px;
-            }
-
-            .room-panel button {
-                border: 0;
-                border-radius: 6px;
-                background: #ff9aa2;
-                color: #5c4033;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 700;
-                padding: 10px 14px;
-            }
-
-        .room-list {
-            position: fixed;
-            top: 66px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: center;
-            max-width: 90vw;
-            z-index: 2;
-        }
-
-            .room-list .room-empty {
-                color: #8a6d55;
-                font-size: 13px;
-                background: rgba(255, 248, 238, 0.85);
-                padding: 4px 10px;
-                border-radius: 12px;
-            }
-
-        .room-chip {
-            border: 2px solid #d8b98f;
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.92);
-            color: #5c4033;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 5px 12px;
-            cursor: pointer;
-        }
-
-            .room-chip:hover {
-                background: #ffe9c7;
-            }
-
-            .room-chip.current {
-                background: #ff9aa2;
-                border-color: #ff9aa2;
-            }
     </style>
 </head>
 <body>
 
-    <div class="room-panel">
-        <input id="roomInput" type="text" value="default" aria-label="Room">
-        <button id="joinButton" type="button">JOIN</button>
+    <div id="lobby-screen" class="lobby-container">
+        <h1 class="game-title">Drop Ocean 🌊</h1>
+
+        <button id="quickMatchBtn" class="ocean-btn-quick" type="button">すぐに泳ぎにいく（クイック）</button>
+
+        <div class="lobby-subtitle">合言葉で部屋を作る・入る</div>
+        <div class="custom-room-box">
+            <input id="roomInput" type="text" placeholder="部屋の名前..." value="default">
+            <button id="joinButton" type="button">ダイブ</button>
+        </div>
+
+        <div class="lobby-subtitle">ただいま募集中のお部屋</div>
+        <div id="roomList" class="room-list-scroll"></div>
     </div>
 
-    <div class="room-list" id="roomList"></div>
-
-    <canvas id="gameCanvas" width="1440" height="820"></canvas>
+    <div id="game-screen">
+        <canvas id="gameCanvas" width="1440" height="820"></canvas>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
 
+        const lobbyScreen = document.getElementById("lobby-screen");
+        const gameScreen = document.getElementById("game-screen");
         const roomInput = document.getElementById("roomInput");
         const joinButton = document.getElementById("joinButton");
+        const quickMatchBtn = document.getElementById("quickMatchBtn");
+        const roomListEl = document.getElementById("roomList");
 
-        function currentRoom() {
-            return roomInput.value.trim() || "default";
-        }
+        let activeRoomsRawList = []; // サーバーから届いた生データを保持
 
-        function joinRoom() {
-            roomInput.value = currentRoom();
-            myRoomId = currentRoom();
-            enemyState = null;
+        // 部屋に入室完了したときに呼ばれる画面切り替え関数
+        function enterGameRoom(roomName) {
+            myRoomId = roomName;
+            socket.emit("joinRoom", myRoomId);
+
+            // 🌟 ロビーを消してゲーム画面を出す
+            lobbyScreen.style.display = "none";
+            gameScreen.style.display = "block";
+
             resetOwnGame();
-            socket.emit("joinRoom", currentRoom());
         }
 
-        joinButton.addEventListener("click", joinRoom);
+        // ダイブ（通常入室）ボタン
+        joinButton.addEventListener("click", () => {
+            const targetRoom = roomInput.value.trim() || "default";
+            enterGameRoom(targetRoom);
+        });
+
         roomInput.addEventListener("keydown", e => {
             if (e.key === "Enter") {
-                joinRoom();
+                const targetRoom = roomInput.value.trim() || "default";
+                enterGameRoom(targetRoom);
             }
         });
 
+        // クイックマッチボタンの処理
+        quickMatchBtn.addEventListener("click", () => {
+            // 現在1人の部屋（空き枠あり）をさがす
+            const availableRoom = activeRoomsRawList.find(r => r.count === 1);
+            if (availableRoom) {
+                enterGameRoom(availableRoom.id);
+            } else {
+                // なければランダムな部屋名を自動生成して新しく作成
+                const randomRoomName = "ocean-" + Math.floor(1000 + Math.random() * 9000);
+                enterGameRoom(randomRoomName);
+            }
+        });
+
+        // サーバーから届いたお部屋リストをカード化して描画
+        function renderRoomList(list) {
+            activeRoomsRawList = list || [];
+            roomListEl.innerHTML = "";
+
+            if (activeRoomsRawList.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "room-empty-msg";
+                empty.textContent = "誰もいない静かな海です。最初の部屋を作ろう！";
+                roomListEl.appendChild(empty);
+                return;
+            }
+
+            for (const room of activeRoomsRawList) {
+                const card = document.createElement("div");
+                const isFull = room.count >= 2;
+
+                card.className = "room-card " + (isFull ? "full" : "recruiting");
+
+                // カード内部情報
+                const infoBox = document.createElement("div");
+                infoBox.className = "room-card-info";
+
+                const nameStr = document.createElement("span");
+                nameStr.className = "room-card-name";
+                nameStr.textContent = `🐚 部屋: ${room.id}`;
+
+                const statusStr = document.createElement("span");
+                statusStr.className = "room-card-status";
+                statusStr.textContent = isFull ? `満員 (対戦中 ${room.count}/2人)` : `募集中 (待機中 ${room.count}/2人)`;
+
+                infoBox.appendChild(nameStr);
+                infoBox.appendChild(statusStr);
+
+                // 参加ボタン
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "room-card-btn";
+                btn.textContent = isFull ? "満員" : "ダイブ";
+                if (isFull) {
+                    btn.disabled = true;
+                } else {
+                    btn.addEventListener("click", () => {
+                        enterGameRoom(room.id);
+                    });
+                }
+
+                card.appendChild(infoBox);
+                card.appendChild(btn);
+                roomListEl.appendChild(card);
+            }
+        }
+
+        socket.on("roomList", renderRoomList);
+
+        // ----------------------------------------------------------------
+        // 🎮 以下、ゲーム本編のロジック（前回の修正版を完全継承）
+        // ----------------------------------------------------------------
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
@@ -162,10 +404,12 @@
 
         let matchResult = null;
         let myRoomId = "default";
-        let roomPlayerCounts = {};
 
         function isMatched() {
-            return (roomPlayerCounts[myRoomId] || 0) >= 2;
+            // 相手の状態データが届いているか、または今いる部屋に2人以上いるか
+            const currentRoomData = activeRoomsRawList.find(r => r.id === myRoomId);
+            const counts = currentRoomData ? currentRoomData.count : 0;
+            return enemyState !== null || counts >= 2;
         }
 
         let lastDropX = -9999;
@@ -276,6 +520,7 @@
             currentX = FIELD_X + FIELD_WIDTH / 2;
             lastDropX = -9999;
             samePlaceCount = 0;
+            enemyState = null;
         }
 
         function randomLevel() {
@@ -298,22 +543,26 @@
         }
 
         canvas.addEventListener("mousemove", e => {
-            setCurrentXFromClientX(e.clientX);
+            if (lobbyScreen.style.display === "none") setCurrentXFromClientX(e.clientX);
         });
 
         canvas.addEventListener("touchmove", e => {
-            e.preventDefault();
-            setCurrentXFromClientX(e.touches[0].clientX);
+            if (lobbyScreen.style.display === "none") {
+                e.preventDefault();
+                setCurrentXFromClientX(e.touches[0].clientX);
+            }
         }, { passive: false });
 
         canvas.addEventListener("touchstart", e => {
-            e.preventDefault();
-            setCurrentXFromClientX(e.touches[0].clientX);
-            dropCurrentBall();
+            if (lobbyScreen.style.display === "none") {
+                e.preventDefault();
+                setCurrentXFromClientX(e.touches[0].clientX);
+                dropCurrentBall();
+            }
         }, { passive: false });
 
         canvas.addEventListener("click", () => {
-            dropCurrentBall();
+            if (lobbyScreen.style.display === "none") dropCurrentBall();
         });
 
         function dropCurrentBall() {
@@ -508,6 +757,7 @@
         }
 
         function sendGameState() {
+            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
             const now = performance.now();
             if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
                 return;
@@ -517,6 +767,7 @@
         }
 
         socket.on("enemyState", data => {
+            if (lobbyScreen.style.display !== "none") return;
             enemyState = data;
             checkMatchResult();
         });
@@ -540,38 +791,6 @@
                 matchResult = "LOSE";
             }
         }
-
-        const roomListEl = document.getElementById("roomList");
-
-        function renderRoomList(list) {
-            roomPlayerCounts = {};
-            for (const room of list || []) {
-                roomPlayerCounts[room.id] = room.count;
-            }
-
-            roomListEl.innerHTML = "";
-            if (!list || list.length === 0) {
-                const empty = document.createElement("span");
-                empty.className = "room-empty";
-                empty.textContent = "現在アクティブなROOMはありません";
-                roomListEl.appendChild(empty);
-                return;
-            }
-
-            for (const room of list) {
-                const chip = document.createElement("button");
-                chip.type = "button";
-                chip.className = "room-chip" + (room.id === currentRoom() ? " current" : "");
-                chip.textContent = `${room.id} (${room.count}人)`;
-                chip.addEventListener("click", () => {
-                    roomInput.value = room.id;
-                    joinRoom();
-                });
-                roomListEl.appendChild(chip);
-            }
-        }
-
-        socket.on("roomList", renderRoomList);
 
         function drawEnemyField() {
             const eFieldX = FIELD_X + ENEMY_OFFSET;
@@ -651,6 +870,7 @@
         }
 
         function update() {
+            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
             if (gameOver) return;
             if (!isMatched()) return;
 
@@ -667,8 +887,8 @@
             sendGameState();
         }
 
-        // ★ 修正箇所：勝敗条件の文字表示ロジックをリファクタリング
         function draw() {
+            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             drawBackgroundDecor();
@@ -692,14 +912,12 @@
 
                 ctx.textAlign = "center";
 
-                // 勝敗（matchResult）が確定している場合はそれを最優先で大きく中央に表示する
                 if (matchResult) {
                     const resultText = matchResult === "WIN" ? "YOU WIN!" : matchResult === "LOSE" ? "YOU LOSE" : "DRAW";
                     ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
                     ctx.font = "bold 60px sans-serif";
                     ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
                 }
-                // まだ勝敗が決まっておらず、自分だけが先に終了して相手のプレイを待っているとき
                 else if (enemyState && !enemyState.gameOver) {
                     ctx.fillStyle = "white";
                     ctx.font = "50px sans-serif";
@@ -729,7 +947,7 @@
             requestAnimationFrame(loop);
         }
 
-        joinRoom();
+        // 初期ロード時はロビーを表示したいため、自動的なjoinRoom()は取り消し、loopのみ回します
         loop();
     </script>
 </body>
