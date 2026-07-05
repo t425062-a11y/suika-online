@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drop Ocean 🌊</title>
     <style>
-        /* 全体の共通スタイル */
         body {
             margin: 0;
             background: linear-gradient(180deg, #e0f7fa 0%, #b2dfdb 100%);
@@ -18,7 +17,6 @@
             color: #1a365d;
         }
 
-        /* 🌊 部屋選択（ロビー）画面のスタイル */
         .lobby-container {
             display: flex;
             flex-direction: column;
@@ -44,7 +42,6 @@
             text-align: center;
         }
 
-        /* 波打つアニメーション付きのクイックボタン */
         .ocean-btn-quick {
             width: 100%;
             background: linear-gradient(135deg, #0288d1 0%, #00b0ff 100%);
@@ -71,15 +68,6 @@
             }
         }
 
-        .ocean-btn-quick:hover {
-            box-shadow: 0 8px 20px rgba(2, 136, 209, 0.4);
-        }
-
-        .ocean-btn-quick:active {
-            transform: scale(0.98);
-        }
-
-        /* カスタム部屋作成ボックス */
         .custom-room-box {
             width: 100%;
             display: flex;
@@ -96,12 +84,7 @@
                 color: #1a365d;
                 background: white;
                 outline: none;
-                transition: border-color 0.2s;
             }
-
-                .custom-room-box input:focus {
-                    border-color: #00bcd4;
-                }
 
             .custom-room-box button {
                 background: #ff8a80;
@@ -112,17 +95,7 @@
                 font-size: 16px;
                 font-weight: bold;
                 cursor: pointer;
-                box-shadow: 0 4px 10px rgba(255, 138, 128, 0.3);
-                transition: transform 0.2s;
             }
-
-                .custom-room-box button:hover {
-                    background: #ff5252;
-                }
-
-                .custom-room-box button:active {
-                    transform: scale(0.95);
-                }
 
         .lobby-subtitle {
             font-size: 16px;
@@ -132,7 +105,6 @@
             color: #006064;
         }
 
-        /* スクロール可能な部屋リスト */
         .room-list-scroll {
             width: 100%;
             overflow-y: auto;
@@ -140,26 +112,8 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            padding-right: 4px;
         }
 
-            .room-list-scroll::-webkit-scrollbar {
-                width: 6px;
-            }
-
-            .room-list-scroll::-webkit-scrollbar-thumb {
-                background: #b2ebf2;
-                border-radius: 4px;
-            }
-
-        .room-empty-msg {
-            text-align: center;
-            color: #78909c;
-            font-size: 14px;
-            padding: 20px 0;
-        }
-
-        /* 部屋カードのデザイン */
         .room-card {
             display: flex;
             justify-content: space-between;
@@ -168,11 +122,8 @@
             border: 2px solid #e0f2f1;
             border-radius: 14px;
             padding: 12px 16px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
-            transition: border-color 0.2s;
         }
 
-            /* 状態ごとのカード色分け */
             .room-card.recruiting {
                 border-color: #80cbc4;
             }
@@ -183,38 +134,12 @@
                 opacity: 0.7;
             }
 
-        .room-card-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .room-card-name {
-            font-weight: bold;
-            font-size: 15px;
-        }
-
-        .room-card-status {
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .room-card.recruiting .room-card-status {
-            color: #00796b;
-        }
-
-        .room-card.full .room-card-status {
-            color: #78909c;
-        }
-
         .room-card-btn {
             border: none;
             border-radius: 10px;
             padding: 8px 14px;
-            font-size: 13px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s;
         }
 
         .room-card.recruiting .room-card-btn {
@@ -222,23 +147,14 @@
             color: white;
         }
 
-            .room-card.recruiting .room-card-btn:hover {
-                background: #00796b;
-            }
-
-            .room-card.recruiting .room-card-btn:active {
-                transform: scale(0.95);
-            }
-
         .room-card.full .room-card-btn {
             background: #b0bec5;
             color: white;
             cursor: not-allowed;
         }
 
-        /* 🎮 ゲーム（キャンバス）画面のスタイル */
         #game-screen {
-            display: none; /* 初期状態は非表示 */
+            display: none;
         }
 
         canvas {
@@ -255,15 +171,12 @@
 
     <div id="lobby-screen" class="lobby-container">
         <h1 class="game-title">Drop Ocean 🌊</h1>
-
         <button id="quickMatchBtn" class="ocean-btn-quick" type="button">すぐに泳ぎにいく（クイック）</button>
-
         <div class="lobby-subtitle">合言葉で部屋を作る・入る</div>
         <div class="custom-room-box">
             <input id="roomInput" type="text" placeholder="部屋の名前..." value="default">
             <button id="joinButton" type="button">ダイブ</button>
         </div>
-
         <div class="lobby-subtitle">ただいま募集中のお部屋</div>
         <div id="roomList" class="room-list-scroll"></div>
     </div>
@@ -283,10 +196,9 @@
         const quickMatchBtn = document.getElementById("quickMatchBtn");
         const roomListEl = document.getElementById("roomList");
 
-        let activeRoomsRawList = []; // サーバーから届いた生データを保持
-        let isInGameMode = false;    // ゲームモード（部屋の中）に入ったかどうかの絶対フラグ
+        let activeRoomsRawList = [];
+        let isInGameMode = false;
 
-        // 部屋に入室完了したときに呼ばれる画面切り替え関数
         function enterGameRoom(roomName) {
             myRoomId = roomName;
             isInGameMode = true;
@@ -440,9 +352,7 @@
             }
 
             update() {
-                if (this.spawnTimer > 0) {
-                    this.spawnTimer--;
-                }
+                if (this.spawnTimer > 0) this.spawnTimer--;
 
                 this.vy += gravity;
                 if (this.vy > 10) this.vy = 10;
@@ -670,6 +580,7 @@
         }
 
         function checkGameOver() {
+            if (gameOver) return; // すでにゲームオーバーならチェック不要
             for (const ball of balls) {
                 if (ball.isNew) continue;
                 if (ball.y - ball.radius < lineY) {
@@ -768,12 +679,11 @@
             checkMatchResult();
         });
 
-        // 🌟 修正の要：完全な勝敗ロジックに変更
         function checkMatchResult() {
             if (matchResult) return;
             if (!enemyState) return;
 
-            // 👑 お互いがゲームオーバーになった時だけ、最終スコアで決着を付ける！
+            // 👑 お互いがゲームオーバーになった場合、スコアを最終判定
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -783,14 +693,14 @@
                     matchResult = "DRAW";
                 }
             }
-            // 自分がまだ生きているのに、相手が先に死んだ時
+            // 自分がまだ生きているが、相手が先に力尽きた場合
             else if (!gameOver && enemyState.gameOver) {
-                // もし現時点で相手のスコアを上回っていれば、その瞬間に勝利確定にしてあげても良い
+                // 既に相手のスコアを超えていたらその時点でWINに！
                 if (score > enemyState.score) {
                     matchResult = "WIN";
                 }
             }
-            // 自分が先に死んで、相手がまだプレイ中の時は matchResult は null のまま（待機）にする
+            // 自分が先に力尽きて、相手がまだプレイ中の間は判定を保留（待機画面）
         }
 
         function drawEnemyField() {
@@ -870,20 +780,25 @@
             ctx.globalAlpha = 1;
         }
 
+        // 🌟 物理処理と通信処理を分離して、死んだ後も通信を継続
         function update() {
             if (!isInGameMode) return;
-            if (gameOver) return;
             if (!isMatched()) return;
 
-            for (const ball of balls) {
-                ball.update();
+            // 自分がまだゲームオーバーになっていない時だけ物理演算をする
+            if (!gameOver) {
+                for (const ball of balls) {
+                    ball.update();
+                }
+
+                for (let k = 0; k < 10; k++) {
+                    mergeBalls();
+                }
+
+                checkGameOver();
             }
 
-            for (let k = 0; k < 10; k++) {
-                mergeBalls();
-            }
-
-            checkGameOver();
+            // 👑 自分が死んだ後も、勝敗チェックと送信だけはループ毎に実行！
             checkMatchResult();
             sendGameState();
         }
@@ -899,7 +814,7 @@
             drawNext();
             drawEnemyField();
 
-            if (isMatched()) {
+            if (isMatched() && !gameOver) {
                 drawDropPreview();
             }
 
@@ -907,7 +822,6 @@
                 ball.draw();
             }
 
-            // 👑 表示ロジックのアップデート
             if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -918,18 +832,17 @@
                 ctx.font = "bold 60px sans-serif";
                 ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
             }
-            // 自分が死んだけど、相手がまだプレイ中のとき（勝敗を決めずに待つ）
             else if (gameOver) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
                 ctx.textAlign = "center";
                 ctx.fillStyle = "white";
-                ctx.font = "50px sans-serif";
+                ctx.font = "45px sans-serif";
                 ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 30);
 
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "22px sans-serif";
+                ctx.font = "20px sans-serif";
                 ctx.fillText("相手のプレイ終了を待っています...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 40);
             }
             else if (!isMatched()) {
