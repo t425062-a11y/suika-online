@@ -290,7 +290,7 @@
             myRoomId = roomName;
             socket.emit("joinRoom", myRoomId);
 
-            // 🌟 ロビーを消してゲーム画面を出す
+            // ロビーを消してゲーム画面を出す
             lobbyScreen.style.display = "none";
             gameScreen.style.display = "block";
 
@@ -379,7 +379,7 @@
         socket.on("roomList", renderRoomList);
 
         // ----------------------------------------------------------------
-        // 🎮 以下、ゲーム本編のロジック（前回の修正版を完全継承）
+        // 🎮 以下、ゲーム本編のロジック
         // ----------------------------------------------------------------
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -405,11 +405,20 @@
         let matchResult = null;
         let myRoomId = "default";
 
+        // 🌟 確実にマッチングを固定するためのフラグを追加
+        let isMatchStarted = false;
+
         function isMatched() {
-            // 相手の状態データが届いているか、または今いる部屋に2人以上いるか
+            // 既に一度ゲームが始まっている、あるいは相手のデータがある、あるいは部屋に2人以上いるならマッチしたとみなす
+            if (isMatchStarted) return true;
+
             const currentRoomData = activeRoomsRawList.find(r => r.id === myRoomId);
             const counts = currentRoomData ? currentRoomData.count : 0;
-            return enemyState !== null || counts >= 2;
+            if (enemyState !== null || counts >= 2) {
+                isMatchStarted = true; // 一度マッチしたらtrueで固定
+                return true;
+            }
+            return false;
         }
 
         let lastDropX = -9999;
@@ -521,6 +530,7 @@
             lastDropX = -9999;
             samePlaceCount = 0;
             enemyState = null;
+            isMatchStarted = false; // 初期化
         }
 
         function randomLevel() {
@@ -757,7 +767,7 @@
         }
 
         function sendGameState() {
-            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
+            if (lobbyScreen.style.display !== "none") return;
             const now = performance.now();
             if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
                 return;
@@ -870,7 +880,7 @@
         }
 
         function update() {
-            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
+            if (lobbyScreen.style.display !== "none") return;
             if (gameOver) return;
             if (!isMatched()) return;
 
@@ -888,7 +898,7 @@
         }
 
         function draw() {
-            if (lobbyScreen.style.display !== "none") return; // ロビー中は何もしない
+            if (lobbyScreen.style.display !== "none") return;
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             drawBackgroundDecor();
@@ -906,28 +916,35 @@
                 ball.draw();
             }
 
-            if (gameOver || matchResult) {
+            // 🌟 修正箇所：勝敗条件（matchResult）がある場合は isMatched の状態にかかわらず最優先で描画
+            if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
                 ctx.textAlign = "center";
+                const resultText = matchResult === "WIN" ? "YOU WIN!" : matchResult === "LOSE" ? "YOU LOSE" : "DRAW";
+                ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
+                ctx.font = "bold 60px sans-serif";
+                ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
+            }
+            // まだ勝敗は決まっていないが、自分だけがゲームオーバーした時
+            else if (gameOver) {
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
-                if (matchResult) {
-                    const resultText = matchResult === "WIN" ? "YOU WIN!" : matchResult === "LOSE" ? "YOU LOSE" : "DRAW";
-                    ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
-                    ctx.font = "bold 60px sans-serif";
-                    ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
-                }
-                else if (enemyState && !enemyState.gameOver) {
-                    ctx.fillStyle = "white";
-                    ctx.font = "50px sans-serif";
-                    ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 30);
+                ctx.textAlign = "center";
+                ctx.fillStyle = "white";
+                ctx.font = "50px sans-serif";
+                ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 30);
 
+                if (enemyState && !enemyState.gameOver) {
                     ctx.fillStyle = "#ffffff";
                     ctx.font = "22px sans-serif";
                     ctx.fillText("相手のプレイ中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 40);
                 }
-            } else if (!isMatched()) {
+            }
+            // まだマッチングしていない（待機中）とき
+            else if (!isMatched()) {
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
@@ -947,7 +964,6 @@
             requestAnimationFrame(loop);
         }
 
-        // 初期ロード時はロビーを表示したいため、自動的なjoinRoom()は取り消し、loopのみ回します
         loop();
     </script>
 </body>
