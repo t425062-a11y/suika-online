@@ -29,21 +29,108 @@
         border-radius: 18px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.15);
     }
+
+        .room-panel {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: rgba(255, 248, 238, 0.92);
+            border: 3px solid #d8b98f;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+            z-index: 2;
+        }
+
+        .room-panel input {
+            width: 130px;
+            border: 2px solid #d8b98f;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 16px;
+        }
+
+        .room-panel button {
+            border: 0;
+            border-radius: 6px;
+            background: #ff9aa2;
+            color: #5c4033;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            padding: 10px 14px;
+        }
     </style>
 </head>
 
 <body>
+
+    <div class="room-panel">
+        <input id="roomInput"
+               type="text"
+               value="default"
+               aria-label="Room">
+        <button id="joinButton"
+                type="button">
+            JOIN
+        </button>
+    </div>
 
     <canvas id="gameCanvas"
             width="720"
             height="820">
     </canvas>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        
-        const room = prompt("ルーム名を入力してください");
-        socket.emit("joinRoom", room);
+
+        const roomInput =
+            document.getElementById(
+                "roomInput"
+            );
+
+        const joinButton =
+            document.getElementById(
+                "joinButton"
+            );
+
+        function currentRoom() {
+
+            return roomInput.value.trim() ||
+                "default";
+        }
+
+        function joinRoom() {
+
+            roomInput.value =
+                currentRoom();
+
+            enemyState = null;
+
+            socket.emit(
+                "joinRoom",
+                currentRoom()
+            );
+        }
+
+        joinButton.addEventListener(
+            "click",
+            joinRoom
+        );
+
+        roomInput.addEventListener(
+            "keydown",
+            e => {
+                if (e.key === "Enter") {
+                    joinRoom();
+                }
+            }
+        );
 
         const canvas =
             document.getElementById(
@@ -71,6 +158,11 @@
 
         let gameOver = false;
         let score = 0;
+        let enemyState = null;
+        let lastStateSentAt = 0;
+        const STATE_SEND_INTERVAL = 100;
+
+        joinRoom();
 
         // 同じ場所連打判定
         let lastDropX = -9999;
@@ -365,22 +457,62 @@
             return 4;
         }
 
+        function setCurrentXFromClientX(clientX) {
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+            const scaleX =
+                WIDTH / rect.width;
+
+            currentX =
+                (clientX - rect.left) *
+                scaleX;
+        }
+
         canvas.addEventListener(
             "mousemove",
             e => {
-
-                const rect =
-                    canvas.getBoundingClientRect();
-
-                currentX =
-                    e.clientX -
-                    rect.left;
+                setCurrentXFromClientX(
+                    e.clientX
+                );
             }
+        );
+
+        canvas.addEventListener(
+            "touchmove",
+            e => {
+                e.preventDefault();
+
+                setCurrentXFromClientX(
+                    e.touches[0].clientX
+                );
+            },
+            { passive: false }
+        );
+
+        canvas.addEventListener(
+            "touchstart",
+            e => {
+                e.preventDefault();
+
+                setCurrentXFromClientX(
+                    e.touches[0].clientX
+                );
+
+                dropCurrentBall();
+            },
+            { passive: false }
         );
 
         canvas.addEventListener(
             "click",
             () => {
+                dropCurrentBall();
+            }
+        );
+
+        function dropCurrentBall() {
 
                 if (gameOver) return;
 
@@ -474,8 +606,7 @@
 
                 nextLevel =
                     randomLevel();
-            }
-        );
+        }
 
         function collide(a, b) {
 
@@ -485,18 +616,15 @@
             const dy =
                 b.y - a.y;
 
-            const dist =
-                Math.sqrt(
-                    dx * dx +
-                    dy * dy
-                );
-
-            return (
-                dist <
+            const limit =
                 (
                     a.radius +
                     b.radius
-                ) * 0.98
+                ) * 0.98;
+
+            return (
+                dx * dx + dy * dy <
+                limit * limit
             );
         }
 
@@ -905,6 +1033,213 @@
             );
         }
 
+        function serializeState() {
+
+            return {
+                score,
+                gameOver,
+                nextLevel,
+                balls: balls.map(
+                    ball => ({
+                        x: ball.x,
+                        y: ball.y,
+                        level: ball.level,
+                        isObstacle: ball.isObstacle
+                    })
+                )
+            };
+        }
+
+        function sendGameState() {
+
+            const now =
+                performance.now();
+
+            if (
+                now - lastStateSentAt <
+                STATE_SEND_INTERVAL
+            ) {
+                return;
+            }
+
+            lastStateSentAt = now;
+
+            socket.emit(
+                "gameState",
+                serializeState()
+            );
+        }
+
+        socket.on(
+            "enemyState",
+            data => {
+                enemyState = data;
+            }
+        );
+
+        function drawEnemy() {
+
+            ctx.fillStyle =
+                "#fff8ee";
+
+            ctx.fillRect(
+                560,
+                20,
+                140,
+                250
+            );
+
+            ctx.strokeStyle =
+                "#d8b98f";
+
+            ctx.lineWidth = 4;
+
+            ctx.strokeRect(
+                560,
+                20,
+                140,
+                250
+            );
+
+            ctx.fillStyle =
+                "#6b4f3f";
+
+            ctx.font =
+                "22px sans-serif";
+
+            ctx.textAlign =
+                "center";
+
+            ctx.fillText(
+                "ENEMY",
+                630,
+                50
+            );
+
+            if (!enemyState) {
+
+                ctx.font =
+                    "16px sans-serif";
+
+                ctx.fillText(
+                    "WAITING",
+                    630,
+                    140
+                );
+
+                return;
+            }
+
+            ctx.font =
+                "20px sans-serif";
+
+            ctx.fillText(
+                enemyState.score || 0,
+                630,
+                82
+            );
+
+            const miniX = 580;
+            const miniY = 105;
+            const miniW = 100;
+            const miniH = 140;
+            const scale =
+                Math.min(
+                    miniW / FIELD_WIDTH,
+                    miniH / HEIGHT
+                );
+
+            ctx.fillStyle =
+                "#fffdf4";
+
+            ctx.fillRect(
+                miniX,
+                miniY,
+                miniW,
+                miniH
+            );
+
+            ctx.strokeStyle =
+                "#ffb5b5";
+
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                miniX,
+                miniY + lineY * scale
+            );
+
+            ctx.lineTo(
+                miniX + miniW,
+                miniY + lineY * scale
+            );
+
+            ctx.stroke();
+
+            for (
+                const ball
+                of enemyState.balls || []
+            ) {
+
+                const radius =
+                    radiuses[ball.level] || 10;
+
+                const x =
+                    miniX +
+                    (ball.x - FIELD_X) *
+                    scale;
+
+                const y =
+                    miniY +
+                    ball.y *
+                    scale;
+
+                ctx.beginPath();
+
+                ctx.fillStyle =
+                    ball.isObstacle
+                        ? "#444444"
+                        : colors[ball.level] || "#ddd";
+
+                ctx.arc(
+                    x,
+                    y,
+                    Math.max(2, radius * scale),
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+            }
+
+            if (enemyState.gameOver) {
+
+                ctx.fillStyle =
+                    "rgba(0,0,0,0.45)";
+
+                ctx.fillRect(
+                    miniX,
+                    miniY,
+                    miniW,
+                    miniH
+                );
+
+                ctx.fillStyle =
+                    "white";
+
+                ctx.font =
+                    "14px sans-serif";
+
+                ctx.fillText(
+                    "GAME OVER",
+                    miniX + miniW / 2,
+                    miniY + miniH / 2
+                );
+            }
+        }
+
         function drawDropPreview() {
 
             const r =
@@ -956,6 +1291,7 @@
             }
 
             checkGameOver();
+            sendGameState();
         }
 
         function draw() {
@@ -972,6 +1308,7 @@
             drawLine();
             drawScore();
             drawNext();
+            drawEnemy();
             drawDropPreview();
 
             for (
@@ -1026,5 +1363,4 @@
         
     </script>
 </body>
-    <script src="/socket.io/socket.io.js"></script>
 </html>

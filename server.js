@@ -12,9 +12,17 @@ io.on("connection", (socket) => {
     console.log("接続:", socket.id);
 
     socket.on("joinRoom", (room) => {
-        socket.join(room);
-        socket.roomId = room;
-        console.log(`${socket.id} joined ${room}`);
+        const roomId = typeof room === "string" && room.trim()
+            ? room.trim()
+            : "default";
+
+        if (socket.roomId) {
+            socket.leave(socket.roomId);
+        }
+
+        socket.join(roomId);
+        socket.roomId = roomId;
+        console.log(`${socket.id} joined ${roomId}`);
     });
 
     socket.on("gameState", (data) => {
