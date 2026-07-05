@@ -128,7 +128,7 @@
             roomInput.value = currentRoom();
             myRoomId = currentRoom();
             enemyState = null;
-            hasEnemyConnected = false; // ルーム移動時にリセット
+            hasEnemyConnected = false;
             resetOwnGame();
             socket.emit("joinRoom", currentRoom());
         }
@@ -165,8 +165,12 @@
         let myRoomId = "default";
         let roomPlayerCounts = {};
 
-        // ★ 修正：相手のデータが届いたか、またはサーバー側が2人以上と判定しているかでマッチングを判断
         let hasEnemyConnected = false;
+
+        // ★ 再戦管理用の状態変数
+        let myRematchRequested = false;
+        let enemyRematchRequested = false;
+        let rematchButtonRect = { x: 0, y: 0, w: 220, h: 50 }; // ボタンのクリック判定用範囲
 
         function isMatched() {
             return hasEnemyConnected || (roomPlayerCounts[myRoomId] || 0) >= 2;
@@ -280,6 +284,8 @@
             currentX = FIELD_X + FIELD_WIDTH / 2;
             lastDropX = -9999;
             samePlaceCount = 0;
+            myRematchRequested = false;
+            enemyRematchRequested = false;
         }
 
         function randomLevel() {
@@ -313,15 +319,45 @@
         canvas.addEventListener("touchstart", e => {
             e.preventDefault();
             setCurrentXFromClientX(e.touches[0].clientX);
+
+            // タッチ時の再戦ボタン判定
+            if ((gameOver || matchResult) && checkRematchButtonClick(e.touches[0].clientX, e.touches[0].clientY)) {
+                return;
+            }
             dropCurrentBall();
         }, { passive: false });
 
-        canvas.addEventListener("click", () => {
+        canvas.addEventListener("click", e => {
+            // クリック時の再戦ボタン判定
+            if ((gameOver || matchResult) && checkRematchButtonClick(e.clientX, e.clientY)) {
+                return;
+            }
             dropCurrentBall();
         });
 
+        // ★ 追加：再戦ボタンをクリックしたかどうかの判定処理
+        function checkRematchButtonClick(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = WIDTH / rect.width;
+            const scaleY = HEIGHT / rect.height;
+            const clickX = (clientX - rect.left) * scaleX;
+            const clickY = (clientY - rect.top) * scaleY;
+
+            if (clickX >= rematchButtonRect.x && clickX <= rematchButtonRect.x + rematchButtonRect.w &&
+                clickY >= rematchButtonRect.y && clickY <= rematchButtonRect.y + rematchButtonRect.h) {
+
+                if (!myRematchRequested) {
+                    myRematchRequested = true;
+                    // サーバー経由で相手に「再戦希望」を出す（既存のserializeStateに載せるか即時同期）
+                    sendGameState();
+                }
+                return true;
+            }
+            return false;
+        }
+
         function dropCurrentBall() {
-            if (!isMatched()) return; // 2人揃うまでは落とせない
+            if (!isMatched()) return;
             if (gameOver) return;
 
             const radius = radiuses[nextLevel];
@@ -352,7 +388,7 @@
             }
 
             nextLevel = randomLevel();
-            sendGameState(); // 玉を落とした直後にも状態を即座に送信
+            sendGameState();
         }
 
         function collide(a, b) {
@@ -504,6 +540,7 @@
                 score,
                 gameOver,
                 nextLevel,
+                rematchRequested: myRematchRequested, // ★ 再戦希望フラグをデータに含める
                 balls: balls.map(ball => ({
                     x: ball.x,
                     y: ball.y,
@@ -522,10 +559,15 @@
             socket.emit("gameState", serializeState());
         }
 
-        // ★ 修正：相手からデータを受信したら、強制的に対戦相手が存在するフラグをONにする
         socket.on("enemyState", data => {
             enemyState = data;
             hasEnemyConnected = true;
+
+            // ★ 相手の再戦希望状態を同期
+            if (data && data.rematchRequested !== undefined) {
+                enemyRematchRequested = data.rematchRequested;
+            }
+
             checkMatchResult();
         });
 
@@ -574,7 +616,6 @@
             }
         }
 
-        // 念のため両方のイベント名に対応
         socket.on("roomList", renderRoomList);
         socket.on("rooms", renderRoomList);
 
@@ -642,6 +683,13 @@
                 ctx.font = "50px sans-serif";
                 ctx.textAlign = "center";
                 ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2);
+
+                // ★ 相手フィールドに相手の再戦希望状態を表示
+                if (enemyRematchRequested) {
+                    ctx.fillStyle = "#ffd97d";
+                    ctx.font = "20px sans-serif";
+                    ctx.fillText("再戦を希望しています...", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2 + 60);
+                }
             }
         }
 
@@ -657,8 +705,14 @@
         }
 
         function update() {
-            // 定期的に自分の状態を送信（相手側に自分を認識させるため、マッチ前でも送る）
             sendGameState();
+
+            // ★ お互いの了承（再戦希望フラグ）が両方とも成立したら即座に再戦リセット
+            if ((gameOver || matchResult) && myRematchRequested && enemyRematchRequested) {
+                resetOwnGame();
+                sendGameState();
+                return;
+            }
 
             if (!isMatched() || gameOver) return;
 
@@ -690,7 +744,6 @@
                 ball.draw();
             }
 
-            // ★ 修正：2人揃っていない（isMatchedがfalse）の時だけ待機画面を被せる
             if (!isMatched()) {
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -703,24 +756,63 @@
                 ctx.font = "18px sans-serif";
                 ctx.fillText("対戦相手が参加するとスタートします", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 20);
             }
-            else if (gameOver) {
+            else if (gameOver || matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
-                ctx.fillStyle = "white";
-                ctx.font = "50px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
 
-                if (matchResult) {
-                    const resultText = matchResult === "WIN" ? "YOU WIN!" : matchResult === "LOSE" ? "YOU LOSE" : "DRAW";
-                    ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
-                    ctx.font = "40px sans-serif";
-                    ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 60);
-                } else if (enemyState && !enemyState.gameOver) {
+                // 勝敗のテキスト表示
+                if (matchResult === "WIN") {
+                    ctx.fillStyle = "#ffd97d";
+                    ctx.font = "bold 64px sans-serif";
+                    ctx.fillText("YOU WIN!", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
+                } else if (matchResult === "LOSE") {
+                    ctx.fillStyle = "#ff9aa2";
+                    ctx.font = "bold 64px sans-serif";
+                    ctx.fillText("YOU LOSE", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
+                } else if (matchResult === "DRAW") {
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 64px sans-serif";
+                    ctx.fillText("DRAW", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
+                } else {
+                    ctx.fillStyle = "white";
+                    ctx.font = "50px sans-serif";
+                    ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
+                }
+
+                // ★ 再戦ボタンの配置と描画
+                rematchButtonRect.x = FIELD_X + FIELD_WIDTH / 2 - rematchButtonRect.w / 2;
+                rematchButtonRect.y = HEIGHT / 2 + 30;
+
+                ctx.lineWidth = 3;
+                if (myRematchRequested) {
+                    // 自分がすでに承認した時
+                    ctx.fillStyle = "#8ff3ff";
+                    ctx.strokeStyle = "#5bc0be";
+                    ctx.fillRect(rematchButtonRect.x, rematchButtonRect.y, rematchButtonRect.w, rematchButtonRect.h);
+                    ctx.strokeRect(rematchButtonRect.x, rematchButtonRect.y, rematchButtonRect.w, rematchButtonRect.h);
+
+                    ctx.fillStyle = "#333333";
+                    ctx.font = "bold 20px sans-serif";
+                    ctx.fillText(enemyRematchRequested ? "再戦開始..." : "相手の了承待ち...", FIELD_X + FIELD_WIDTH / 2, rematchButtonRect.y + rematchButtonRect.h / 2);
+                } else {
+                    // まだ押していない時
+                    ctx.fillStyle = "#ff9aa2";
+                    ctx.strokeStyle = "#ff7b7b";
+                    ctx.fillRect(rematchButtonRect.x, rematchButtonRect.y, rematchButtonRect.w, rematchButtonRect.h);
+                    ctx.strokeRect(rematchButtonRect.x, rematchButtonRect.y, rematchButtonRect.w, rematchButtonRect.h);
+
                     ctx.fillStyle = "#ffffff";
-                    ctx.font = "22px sans-serif";
-                    ctx.fillText("相手のプレイ中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 50);
+                    ctx.font = "bold 20px sans-serif";
+                    ctx.fillText("もう一度遊ぶ", FIELD_X + FIELD_WIDTH / 2, rematchButtonRect.y + rematchButtonRect.h / 2);
+                }
+
+                // 相手が先に押していた場合の補助通知
+                if (enemyRematchRequested && !myRematchRequested) {
+                    ctx.fillStyle = "#ffd97d";
+                    ctx.font = "16px sans-serif";
+                    ctx.fillText("相手が再戦を希望しています！", FIELD_X + FIELD_WIDTH / 2, rematchButtonRect.y - 15);
                 }
             }
         }
