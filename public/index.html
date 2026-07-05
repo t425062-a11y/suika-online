@@ -284,7 +284,7 @@
         socket.on("roomList", renderRoomList);
 
         // ----------------------------------------------------------------
-        // 🎮 以下、ゲーム本編のロジック
+        // 🎮 ゲーム本編ロジック
         // ----------------------------------------------------------------
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -474,7 +474,8 @@
         });
 
         function dropCurrentBall() {
-            if (gameOver) return;
+            if (gameOver) return; // 自分が死んでたら落とせない
+            if (matchResult) return; // 勝負がついてたら落とせない
             if (!isMatched()) return;
 
             const radius = radiuses[nextLevel];
@@ -580,7 +581,7 @@
         }
 
         function checkGameOver() {
-            if (gameOver) return; // すでにゲームオーバーならチェック不要
+            if (gameOver) return;
             for (const ball of balls) {
                 if (ball.isNew) continue;
                 if (ball.y - ball.radius < lineY) {
@@ -683,7 +684,7 @@
             if (matchResult) return;
             if (!enemyState) return;
 
-            // 👑 お互いがゲームオーバーになった場合、スコアを最終判定
+            // お互いがゲームオーバーになった場合、最終判定
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -695,12 +696,11 @@
             }
             // 自分がまだ生きているが、相手が先に力尽きた場合
             else if (!gameOver && enemyState.gameOver) {
-                // 既に相手のスコアを超えていたらその時点でWINに！
+                // 既に相手のスコアを上回っていたら、その瞬間にリアルタイムでWIN確定！
                 if (score > enemyState.score) {
                     matchResult = "WIN";
                 }
             }
-            // 自分が先に力尽きて、相手がまだプレイ中の間は判定を保留（待機画面）
         }
 
         function drawEnemyField() {
@@ -780,13 +780,13 @@
             ctx.globalAlpha = 1;
         }
 
-        // 🌟 物理処理と通信処理を分離して、死んだ後も通信を継続
+        // 🌟 物理演算が相手の死亡に巻き込まれないように100%完全独立
         function update() {
             if (!isInGameMode) return;
             if (!isMatched()) return;
 
-            // 自分がまだゲームオーバーになっていない時だけ物理演算をする
-            if (!gameOver) {
+            // 自分がまだゲームオーバーになっておらず、かつ勝敗が決まっていないなら物理演算をする
+            if (!gameOver && !matchResult) {
                 for (const ball of balls) {
                     ball.update();
                 }
@@ -798,7 +798,7 @@
                 checkGameOver();
             }
 
-            // 👑 自分が死んだ後も、勝敗チェックと送信だけはループ毎に実行！
+            // 通信と判定は、自分が死んでいようが相手が死んでいようが、毎フレーム必ず回す
             checkMatchResult();
             sendGameState();
         }
@@ -814,7 +814,8 @@
             drawNext();
             drawEnemyField();
 
-            if (isMatched() && !gameOver) {
+            // 勝負がついておらず、自分が生きている時だけ予測線・予告を出す
+            if (isMatched() && !gameOver && !matchResult) {
                 drawDropPreview();
             }
 
