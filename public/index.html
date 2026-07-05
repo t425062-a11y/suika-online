@@ -165,10 +165,9 @@
         let myRoomId = "default";
         let roomPlayerCounts = {};
 
-        // 相手の接続検知フラグ
         let hasEnemyConnected = false;
 
-        // ★ 追加: 再戦機能のための状態変数
+        // 再戦機能のための状態変数
         let myRematchRequested = false;
         let enemyRematchRequested = false;
         let rematchButtonRect = { x: 0, y: 0, w: 220, h: 50 };
@@ -285,7 +284,6 @@
             currentX = FIELD_X + FIELD_WIDTH / 2;
             lastDropX = -9999;
             samePlaceCount = 0;
-            // ★ 再戦フラグをリセット
             myRematchRequested = false;
             enemyRematchRequested = false;
         }
@@ -322,7 +320,6 @@
             e.preventDefault();
             setCurrentXFromClientX(e.touches[0].clientX);
 
-            // ★ タッチした位置が再戦ボタンの中なら処理を分岐
             if ((gameOver || matchResult) && checkRematchButtonClick(e.touches[0].clientX, e.touches[0].clientY)) {
                 return;
             }
@@ -330,14 +327,12 @@
         }, { passive: false });
 
         canvas.addEventListener("click", e => {
-            // ★ クリックした位置が再戦ボタンの中なら処理を分岐
             if ((gameOver || matchResult) && checkRematchButtonClick(e.clientX, e.clientY)) {
                 return;
             }
             dropCurrentBall();
         });
 
-        // ★ 追加: 再戦ボタンのクリック・タッチ判定
         function checkRematchButtonClick(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = WIDTH / rect.width;
@@ -350,7 +345,8 @@
 
                 if (!myRematchRequested) {
                     myRematchRequested = true;
-                    sendGameState();
+                    // ボタンを押したら即座に送信
+                    sendGameState(true);
                 }
                 return true;
             }
@@ -541,7 +537,7 @@
                 score,
                 gameOver,
                 nextLevel,
-                rematchRequested: myRematchRequested, // ★ 再戦希望状態をパケットに乗せる
+                rematchRequested: myRematchRequested,
                 balls: balls.map(ball => ({
                     x: ball.x,
                     y: ball.y,
@@ -551,28 +547,31 @@
             };
         }
 
-        function sendGameState() {
+        function sendGameState(force = false) {
             const now = performance.now();
-            if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
+            if (!force && (now - lastStateSentAt < STATE_SEND_INTERVAL)) {
                 return;
             }
             lastStateSentAt = now;
             socket.emit("gameState", serializeState());
         }
 
+        // ★ 修正: データの受信処理を書き換え、勝敗後も必ず再戦希望フラグを更新するように変更
         socket.on("enemyState", data => {
             enemyState = data;
             hasEnemyConnected = true;
 
-            // ★ 相手の再戦希望状態を取得
             if (data && data.rematchRequested !== undefined) {
                 enemyRematchRequested = data.rematchRequested;
             }
-            checkMatchResult();
+
+            // 勝敗がまだ決まっていない時だけ判定を行う
+            if (!matchResult) {
+                checkMatchResult();
+            }
         });
 
         function checkMatchResult() {
-            if (matchResult) return;
             if (!enemyState) return;
 
             if (enemyState.gameOver && !gameOver) {
@@ -684,7 +683,6 @@
                 ctx.textAlign = "center";
                 ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2);
 
-                // ★ 相手フィールドに相手の再戦希望通知を出す
                 if (enemyRematchRequested) {
                     ctx.fillStyle = "#ffd97d";
                     ctx.font = "20px sans-serif";
@@ -704,10 +702,10 @@
         }
 
         function update() {
-            // ★ お互いに再戦を希望したら即座に初期化
+            // お互いに再戦を希望したら即座に初期化
             if ((gameOver || matchResult) && myRematchRequested && enemyRematchRequested) {
                 resetOwnGame();
-                sendGameState();
+                sendGameState(true);
                 return;
             }
 
@@ -723,7 +721,6 @@
             }
 
             checkGameOver();
-            checkMatchResult();
             sendGameState();
         }
 
@@ -768,7 +765,7 @@
                     ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
                 }
 
-                // ★ 再戦ボタンを描画
+                // 再戦ボタンを描画
                 rematchButtonRect.x = FIELD_X + FIELD_WIDTH / 2 - rematchButtonRect.w / 2;
                 rematchButtonRect.y = HEIGHT / 2 + 30;
 
