@@ -21,14 +21,13 @@
         }
 
         canvas {
-        width: min(95vw, 720px);
-        height: auto;
-
-        background: #ffffff;
-        border: 4px solid #333;
-        border-radius: 18px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    }
+            width: min(95vw, 1440px);
+            height: auto;
+            background: #ffffff;
+            border: 4px solid #333;
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
 
         .room-panel {
             position: fixed;
@@ -46,24 +45,65 @@
             z-index: 2;
         }
 
-        .room-panel input {
-            width: 130px;
-            border: 2px solid #d8b98f;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 16px;
+            .room-panel input {
+                width: 130px;
+                border: 2px solid #d8b98f;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 16px;
+            }
+
+            .room-panel button {
+                border: 0;
+                border-radius: 6px;
+                background: #ff9aa2;
+                color: #5c4033;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 700;
+                padding: 10px 14px;
+            }
+
+        .room-list {
+            position: fixed;
+            top: 66px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            max-width: 90vw;
+            z-index: 2;
         }
 
-        .room-panel button {
-            border: 0;
-            border-radius: 6px;
-            background: #ff9aa2;
+            .room-list .room-empty {
+                color: #8a6d55;
+                font-size: 13px;
+                background: rgba(255, 248, 238, 0.85);
+                padding: 4px 10px;
+                border-radius: 12px;
+            }
+
+        .room-chip {
+            border: 2px solid #d8b98f;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.92);
             color: #5c4033;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 5px 12px;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 700;
-            padding: 10px 14px;
         }
+
+            .room-chip:hover {
+                background: #ffe9c7;
+            }
+
+            .room-chip.current {
+                background: #ff9aa2;
+                border-color: #ff9aa2;
+            }
     </style>
 </head>
 
@@ -80,8 +120,10 @@
         </button>
     </div>
 
+    <div class="room-list" id="roomList"></div>
+
     <canvas id="gameCanvas"
-            width="720"
+            width="1440"
             height="820">
     </canvas>
 
@@ -110,7 +152,12 @@
             roomInput.value =
                 currentRoom();
 
+            myRoomId =
+                currentRoom();
+
             enemyState = null;
+
+            resetOwnGame();
 
             socket.emit(
                 "joinRoom",
@@ -146,9 +193,15 @@
         const HEIGHT =
             canvas.height;
 
+        // 1人分のパネル幅（自分側・相手側で共通、これを基準にフィールドを中央寄せする）
+        const PANEL_WIDTH = WIDTH / 2;
+
+        // 相手側パネルを描画する際のXオフセット
+        const ENEMY_OFFSET = PANEL_WIDTH;
+
         // 盤面
-        const FIELD_WIDTH = Math.min(500, WIDTH - 40);
-        const FIELD_X = (WIDTH - FIELD_WIDTH) / 2;
+        const FIELD_WIDTH = Math.min(500, PANEL_WIDTH - 40);
+        const FIELD_X = (PANEL_WIDTH - FIELD_WIDTH) / 2;
 
         // 重力
         const gravity = 0.75;
@@ -162,7 +215,16 @@
         let lastStateSentAt = 0;
         const STATE_SEND_INTERVAL = 100;
 
-        joinRoom();
+        // 進行中の対戦の勝敗結果 ("WIN" / "LOSE" / "DRAW" / null)
+        let matchResult = null;
+
+        // 現在自分がいるROOM ID と、ROOMごとの人数（roomListイベントで更新）
+        let myRoomId = "default";
+        let roomPlayerCounts = {};
+
+        function isMatched() {
+            return (roomPlayerCounts[myRoomId] || 0) >= 2;
+        }
 
         // 同じ場所連打判定
         let lastDropX = -9999;
@@ -445,6 +507,28 @@
         let nextLevel =
             randomLevel();
 
+        function resetOwnGame() {
+
+            balls = [];
+
+            score = 0;
+
+            gameOver = false;
+
+            matchResult = null;
+
+            nextLevel =
+                randomLevel();
+
+            currentX =
+                FIELD_X +
+                FIELD_WIDTH / 2;
+
+            lastDropX = -9999;
+
+            samePlaceCount = 0;
+        }
+
         function randomLevel() {
 
             const r =
@@ -465,9 +549,19 @@
             const scaleX =
                 WIDTH / rect.width;
 
-            currentX =
+            let x =
                 (clientX - rect.left) *
                 scaleX;
+
+            if (x < FIELD_X) {
+                x = FIELD_X;
+            }
+
+            if (x > FIELD_X + FIELD_WIDTH) {
+                x = FIELD_X + FIELD_WIDTH;
+            }
+
+            currentX = x;
         }
 
         canvas.addEventListener(
@@ -514,98 +608,99 @@
 
         function dropCurrentBall() {
 
-                if (gameOver) return;
+            if (gameOver) return;
+            if (!isMatched()) return;
 
-                const radius =
-                    radiuses[nextLevel];
+            const radius =
+                radiuses[nextLevel];
 
-                let spawnX =
-                    currentX;
+            let spawnX =
+                currentX;
 
-                if (
-                    spawnX <
-                    FIELD_X + radius
-                ) {
-                    spawnX =
-                        FIELD_X + radius;
-                }
+            if (
+                spawnX <
+                FIELD_X + radius
+            ) {
+                spawnX =
+                    FIELD_X + radius;
+            }
 
-                if (
-                    spawnX >
+            if (
+                spawnX >
+                FIELD_X +
+                FIELD_WIDTH -
+                radius
+            ) {
+                spawnX =
                     FIELD_X +
                     FIELD_WIDTH -
-                    radius
-                ) {
-                    spawnX =
-                        FIELD_X +
+                    radius;
+            }
+
+            if (
+                Math.abs(
+                    spawnX -
+                    lastDropX
+                ) < 25
+            ) {
+                samePlaceCount++;
+            } else {
+                samePlaceCount = 0;
+            }
+
+            lastDropX = spawnX;
+
+            if (
+                samePlaceCount >= 5
+            ) {
+
+                const obstacleLevel =
+                    randomLevel();
+
+                const obstacleRadius =
+                    radiuses[
+                    obstacleLevel
+                    ];
+
+                const randomX =
+                    FIELD_X +
+                    obstacleRadius +
+                    Math.random() *
+                    (
                         FIELD_WIDTH -
-                        radius;
-                }
-
-                if (
-                    Math.abs(
-                        spawnX -
-                        lastDropX
-                    ) < 25
-                ) {
-                    samePlaceCount++;
-                } else {
-                    samePlaceCount = 0;
-                }
-
-                lastDropX = spawnX;
-
-                if (
-                    samePlaceCount >= 5
-                ) {
-
-                    const obstacleLevel =
-                        randomLevel();
-
-                    const obstacleRadius =
-                        radiuses[
-                        obstacleLevel
-                        ];
-
-                    const randomX =
-                        FIELD_X +
-                        obstacleRadius +
-                        Math.random() *
-                        (
-                            FIELD_WIDTH -
-                            obstacleRadius * 2
-                        );
-
-                    const ojama =
-                        new Ball(
-                            randomX,
-                            50,
-                            obstacleLevel
-                        );
-
-                    ojama.isObstacle =
-                        true;
-
-                    balls.push(
-                        ojama
+                        obstacleRadius * 2
                     );
 
-                    samePlaceCount = 0;
+                const ojama =
+                    new Ball(
+                        randomX,
+                        50,
+                        obstacleLevel
+                    );
 
-                } else {
+                ojama.isObstacle =
+                    true;
 
-                    const ball =
-                        new Ball(
-                            spawnX,
-                            50,
-                            nextLevel
-                        );
+                balls.push(
+                    ojama
+                );
 
-                    balls.push(ball);
-                }
+                samePlaceCount = 0;
 
-                nextLevel =
-                    randomLevel();
+            } else {
+
+                const ball =
+                    new Ball(
+                        spawnX,
+                        50,
+                        nextLevel
+                    );
+
+                balls.push(ball);
+            }
+
+            nextLevel =
+                randomLevel();
         }
 
         function collide(a, b) {
@@ -1074,19 +1169,157 @@
             "enemyState",
             data => {
                 enemyState = data;
+                checkMatchResult();
             }
         );
 
-        function drawEnemy() {
+        // 自分・相手どちらかがゲームオーバーになった時点で勝敗を決定する
+        function checkMatchResult() {
 
+            if (matchResult) {
+                return;
+            }
+
+            if (!enemyState) {
+                return;
+            }
+
+            if (enemyState.gameOver && !gameOver) {
+
+                // 相手が先にトップアウト -> 自分の勝ち（このタイミングで自分の対戦も終了させる）
+                matchResult = "WIN";
+                gameOver = true;
+
+            } else if (enemyState.gameOver && gameOver) {
+
+                // 両者ゲームオーバー -> スコアで比較
+                if (score > enemyState.score) {
+                    matchResult = "WIN";
+                } else if (score < enemyState.score) {
+                    matchResult = "LOSE";
+                } else {
+                    matchResult = "DRAW";
+                }
+
+            } else if (!enemyState.gameOver && gameOver) {
+
+                // 自分が先にトップアウト -> 自分の負け
+                matchResult = "LOSE";
+            }
+        }
+
+        const roomListEl =
+            document.getElementById(
+                "roomList"
+            );
+
+        function renderRoomList(list) {
+
+            roomPlayerCounts = {};
+
+            for (const room of list || []) {
+                roomPlayerCounts[room.id] = room.count;
+            }
+
+            roomListEl.innerHTML = "";
+
+            if (!list || list.length === 0) {
+
+                const empty =
+                    document.createElement("span");
+
+                empty.className =
+                    "room-empty";
+
+                empty.textContent =
+                    "現在アクティブなROOMはありません";
+
+                roomListEl.appendChild(empty);
+
+                return;
+            }
+
+            for (const room of list) {
+
+                const chip =
+                    document.createElement("button");
+
+                chip.type = "button";
+
+                chip.className =
+                    "room-chip" +
+                    (
+                        room.id === currentRoom()
+                            ? " current"
+                            : ""
+                    );
+
+                chip.textContent =
+                    `${room.id} (${room.count}人)`;
+
+                chip.addEventListener(
+                    "click",
+                    () => {
+                        roomInput.value = room.id;
+                        joinRoom();
+                    }
+                );
+
+                roomListEl.appendChild(chip);
+            }
+        }
+
+        socket.on(
+            "roomList",
+            renderRoomList
+        );
+
+        function drawEnemyField() {
+
+            // 相手側パネルの基準X（自分の盤面と同じ形・同じ縮尺で右側に描画する）
+            const eFieldX =
+                FIELD_X + ENEMY_OFFSET;
+
+            // 背景（自分の盤面と同じ見た目）
+            ctx.fillStyle =
+                "#fffdf4";
+
+            ctx.fillRect(
+                eFieldX,
+                0,
+                FIELD_WIDTH,
+                HEIGHT
+            );
+
+            // ゲームオーバーライン
+            ctx.strokeStyle =
+                "#ff7b7b";
+
+            ctx.lineWidth = 4;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                eFieldX,
+                lineY
+            );
+
+            ctx.lineTo(
+                eFieldX + FIELD_WIDTH,
+                lineY
+            );
+
+            ctx.stroke();
+
+            // ラベル・スコアパネル
             ctx.fillStyle =
                 "#fff8ee";
 
             ctx.fillRect(
-                560,
+                ENEMY_OFFSET + 20,
                 20,
                 140,
-                250
+                90
             );
 
             ctx.strokeStyle =
@@ -1095,89 +1328,57 @@
             ctx.lineWidth = 4;
 
             ctx.strokeRect(
-                560,
+                ENEMY_OFFSET + 20,
                 20,
                 140,
-                250
+                90
             );
 
             ctx.fillStyle =
                 "#6b4f3f";
 
             ctx.font =
-                "22px sans-serif";
+                "24px sans-serif";
 
             ctx.textAlign =
-                "center";
+                "left";
 
             ctx.fillText(
                 "ENEMY",
-                630,
+                ENEMY_OFFSET + 35,
                 50
+            );
+
+            ctx.font =
+                "32px sans-serif";
+
+            ctx.fillText(
+                enemyState ? (enemyState.score || 0) : 0,
+                ENEMY_OFFSET + 35,
+                88
             );
 
             if (!enemyState) {
 
+                ctx.fillStyle =
+                    "#6b4f3f";
+
                 ctx.font =
-                    "16px sans-serif";
+                    "22px sans-serif";
+
+                ctx.textAlign =
+                    "center";
 
                 ctx.fillText(
                     "WAITING",
-                    630,
-                    140
+                    eFieldX + FIELD_WIDTH / 2,
+                    HEIGHT / 2
                 );
 
                 return;
             }
 
-            ctx.font =
-                "20px sans-serif";
-
-            ctx.fillText(
-                enemyState.score || 0,
-                630,
-                82
-            );
-
-            const miniX = 580;
-            const miniY = 105;
-            const miniW = 100;
-            const miniH = 140;
-            const scale =
-                Math.min(
-                    miniW / FIELD_WIDTH,
-                    miniH / HEIGHT
-                );
-
-            ctx.fillStyle =
-                "#fffdf4";
-
-            ctx.fillRect(
-                miniX,
-                miniY,
-                miniW,
-                miniH
-            );
-
-            ctx.strokeStyle =
-                "#ffb5b5";
-
-            ctx.lineWidth = 2;
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                miniX,
-                miniY + lineY * scale
-            );
-
-            ctx.lineTo(
-                miniX + miniW,
-                miniY + lineY * scale
-            );
-
-            ctx.stroke();
-
+            // 相手のボールを自分と同じ縮尺（等倍）で描画
             for (
                 const ball
                 of enemyState.balls || []
@@ -1187,14 +1388,11 @@
                     radiuses[ball.level] || 10;
 
                 const x =
-                    miniX +
-                    (ball.x - FIELD_X) *
-                    scale;
+                    eFieldX +
+                    (ball.x - FIELD_X);
 
                 const y =
-                    miniY +
-                    ball.y *
-                    scale;
+                    ball.y;
 
                 ctx.beginPath();
 
@@ -1203,39 +1401,76 @@
                         ? "#444444"
                         : colors[ball.level] || "#ddd";
 
-                ctx.arc(
+                ctx.ellipse(
                     x,
                     y,
-                    Math.max(2, radius * scale),
+                    radius,
+                    radius * 0.95,
+                    0,
                     0,
                     Math.PI * 2
                 );
 
                 ctx.fill();
+
+                ctx.textAlign =
+                    "center";
+
+                ctx.textBaseline =
+                    "middle";
+
+                ctx.font =
+                    `${radius * 0.7}px sans-serif`;
+
+                if (ball.isObstacle) {
+
+                    ctx.fillStyle =
+                        "white";
+
+                    ctx.fillText(
+                        "X",
+                        x,
+                        y
+                    );
+
+                } else {
+
+                    ctx.fillStyle =
+                        "#5c4033";
+
+                    ctx.fillText(
+                        ball.level,
+                        x,
+                        y
+                    );
+                }
             }
 
             if (enemyState.gameOver) {
 
                 ctx.fillStyle =
-                    "rgba(0,0,0,0.45)";
+                    "rgba(0,0,0,0.55)";
 
                 ctx.fillRect(
-                    miniX,
-                    miniY,
-                    miniW,
-                    miniH
+                    eFieldX,
+                    0,
+                    FIELD_WIDTH,
+                    HEIGHT
                 );
 
                 ctx.fillStyle =
                     "white";
 
                 ctx.font =
-                    "14px sans-serif";
+                    "50px sans-serif";
+
+                ctx.textAlign =
+                    "center";
 
                 ctx.fillText(
                     "GAME OVER",
-                    miniX + miniW / 2,
-                    miniY + miniH / 2
+                    eFieldX + FIELD_WIDTH / 2,
+                    HEIGHT / 2
                 );
             }
         }
@@ -1274,6 +1509,7 @@
         function update() {
 
             if (gameOver) return;
+            if (!isMatched()) return;
 
             for (
                 const ball
@@ -1291,6 +1527,7 @@
             }
 
             checkGameOver();
+            checkMatchResult();
             sendGameState();
         }
 
@@ -1308,8 +1545,11 @@
             drawLine();
             drawScore();
             drawNext();
-            drawEnemy();
-            drawDropPreview();
+            drawEnemyField();
+
+            if (isMatched()) {
+                drawDropPreview();
+            }
 
             for (
                 const ball
@@ -1345,6 +1585,85 @@
                     FIELD_WIDTH / 2,
                     HEIGHT / 2
                 );
+
+                if (matchResult) {
+
+                    const resultText =
+                        matchResult === "WIN"
+                            ? "YOU WIN!"
+                            : matchResult === "LOSE"
+                                ? "YOU LOSE"
+                                : "DRAW";
+
+                    ctx.fillStyle =
+                        matchResult === "WIN"
+                            ? "#ffd97d"
+                            : matchResult === "LOSE"
+                                ? "#ff9aa2"
+                                : "#ffffff";
+
+                    ctx.font =
+                        "40px sans-serif";
+
+                    ctx.fillText(
+                        resultText,
+                        FIELD_X +
+                        FIELD_WIDTH / 2,
+                        HEIGHT / 2 + 60
+                    );
+
+                } else if (enemyState && !enemyState.gameOver) {
+
+                    ctx.fillStyle =
+                        "#ffffff";
+
+                    ctx.font =
+                        "22px sans-serif";
+
+                    ctx.fillText(
+                        "相手のプレイ中...",
+                        FIELD_X +
+                        FIELD_WIDTH / 2,
+                        HEIGHT / 2 + 50
+                    );
+                }
+            } else if (!isMatched()) {
+
+                ctx.fillStyle =
+                    "rgba(0,0,0,0.5)";
+
+                ctx.fillRect(
+                    FIELD_X,
+                    0,
+                    FIELD_WIDTH,
+                    HEIGHT
+                );
+
+                ctx.fillStyle =
+                    "white";
+
+                ctx.font =
+                    "28px sans-serif";
+
+                ctx.textAlign =
+                    "center";
+
+                ctx.fillText(
+                    "待機中...",
+                    FIELD_X +
+                    FIELD_WIDTH / 2,
+                    HEIGHT / 2 - 16
+                );
+
+                ctx.font =
+                    "18px sans-serif";
+
+                ctx.fillText(
+                    "対戦相手が参加するとスタートします",
+                    FIELD_X +
+                    FIELD_WIDTH / 2,
+                    HEIGHT / 2 + 20
+                );
             }
         }
 
@@ -1358,9 +1677,10 @@
             );
         }
 
+        joinRoom();
         loop();
 
-        
+
     </script>
 </body>
 </html>
