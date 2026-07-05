@@ -384,7 +384,6 @@
                     this.vx *= 0.2;
                 }
 
-                // 【修正箇所】中心がラインより下（+半径分）に落ちたら「生まれたて状態」を解除
                 if (this.y > lineY + this.radius) {
                     this.isNew = false;
                 }
@@ -581,14 +580,11 @@
             }
         }
 
-        // 【修正箇所】出現時即死バグを防止する厳密なゲームオーバー判定
         function checkGameOver() {
             if (gameOver) return;
             for (const ball of balls) {
-                // 生まれたてフルーツは除外
                 if (ball.isNew) continue;
 
-                // フルーツが静止（または迫り上がり）していて、かつラインを上にはみ出しているか
                 if (ball.y > lineY && (ball.y - ball.radius) < lineY) {
                     if (Math.abs(ball.vy) < 0.5) {
                         gameOver = true;
@@ -814,6 +810,15 @@
             if (!isInGameMode) return;
             if (!isMatched()) return;
 
+            // 👑 先に勝敗の変動をチェック
+            checkMatchResult();
+
+            // 勝敗が決定したら、自分の演算ループもその場で即座に止める
+            if (matchResult) {
+                gameOver = true;
+            }
+
+            // 誰も死んでおらず、結果も未確定の間だけ物理演算を動かす
             if (!gameOver && !matchResult) {
                 for (const ball of balls) {
                     ball.update();
@@ -826,7 +831,6 @@
                 checkGameOver();
             }
 
-            checkMatchResult();
             sendGameState();
         }
 
