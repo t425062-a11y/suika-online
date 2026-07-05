@@ -563,36 +563,28 @@
                 enemyRematchRequested = data.rematchRequested;
             }
 
-            // ★ 常に最新の勝敗判定を行うように修正
             checkMatchResult();
         });
 
-        // ★ 修正: 自分か相手のどちらかがゲームオーバー、あるいは両方ゲームオーバーの全パターンで正しく WIN/LOSE/DRAW を判定する
         function checkMatchResult() {
             if (!enemyState) return;
 
             const enemyScore = enemyState.score || 0;
 
             if (gameOver && enemyState.gameOver) {
-                // 両方ゲームオーバーの時
                 if (score > enemyScore) matchResult = "WIN";
                 else if (score < enemyScore) matchResult = "LOSE";
                 else matchResult = "DRAW";
             } else if (gameOver && !enemyState.gameOver) {
-                // 自分だけがゲームオーバーの時
                 if (score < enemyScore) {
-                    // すでにスコアが負けていれば即 LOSE 確定
                     matchResult = "LOSE";
                 } else {
-                    // 自分のスコアがまだ勝っている時は、相手が追い抜くかゲームオーバーになるまで結果を保留 (GAME OVER 表示のまま)
                     matchResult = null;
                 }
             } else if (!gameOver && enemyState.gameOver) {
-                // 相手だけがゲームオーバーの時
                 if (score > enemyScore) {
-                    // すでにスコアが勝っていれば即 WIN 確定
                     matchResult = "WIN";
-                    gameOver = true; // 自分もゲームを終了させる
+                    gameOver = true;
                 }
             }
         }
@@ -731,10 +723,11 @@
             }
 
             checkGameOver();
-            checkMatchResult(); // ループ内でも常にチェックを走らせる
+            checkMatchResult();
             sendGameState();
         }
 
+        // ★ 描画関数内の表示条件を劇的に改善
         function draw() {
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
@@ -753,11 +746,13 @@
                 ball.draw();
             }
 
+            // 自分か相手のどちらかが終了、または勝敗が決まっている場合の表示ロジック
             if (gameOver || matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
                 ctx.textAlign = "center";
+
                 if (matchResult === "WIN") {
                     ctx.fillStyle = "#ffd97d";
                     ctx.font = "bold 64px sans-serif";
@@ -771,13 +766,19 @@
                     ctx.font = "bold 64px sans-serif";
                     ctx.fillText("DRAW", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
                 } else {
+                    // 自分は終わったが、まだ勝敗が未確定（相手がプレイ中で、かつ自分のスコアの方が高い）とき
                     ctx.fillStyle = "white";
-                    ctx.font = "50px sans-serif";
-                    ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
+                    ctx.font = "46px sans-serif";
+                    ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 50);
+
+                    ctx.fillStyle = "#ffd97d";
+                    ctx.font = "22px sans-serif";
+                    ctx.fillText("相手のプレイ終了を待っています...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 20);
                 }
 
+                // 再戦ボタンを描画 (勝敗が決まっていなくても、自分がゲームオーバーなら押せるように設置)
                 rematchButtonRect.x = FIELD_X + FIELD_WIDTH / 2 - rematchButtonRect.w / 2;
-                rematchButtonRect.y = HEIGHT / 2 + 30;
+                rematchButtonRect.y = HEIGHT / 2 + 70;
 
                 ctx.lineWidth = 3;
                 if (myRematchRequested) {
