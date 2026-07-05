@@ -2,16 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Number Merge Game</title>
-
     <style>
-
         body {
             margin: 0;
-            background: linear-gradient( 180deg, #fff6d6 0%, #ffd9ec 100% );
+            background: linear-gradient(180deg, #fff6d6 0%, #ffd9ec 100%);
             overflow: hidden;
             font-family: sans-serif;
             display: flex;
@@ -106,107 +102,57 @@
             }
     </style>
 </head>
-
 <body>
 
     <div class="room-panel">
-        <input id="roomInput"
-               type="text"
-               value="default"
-               aria-label="Room">
-        <button id="joinButton"
-                type="button">
-            JOIN
-        </button>
+        <input id="roomInput" type="text" value="default" aria-label="Room">
+        <button id="joinButton" type="button">JOIN</button>
     </div>
 
     <div class="room-list" id="roomList"></div>
 
-    <canvas id="gameCanvas"
-            width="1440"
-            height="820">
-    </canvas>
+    <canvas id="gameCanvas" width="1440" height="820"></canvas>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
 
-        const roomInput =
-            document.getElementById(
-                "roomInput"
-            );
-
-        const joinButton =
-            document.getElementById(
-                "joinButton"
-            );
+        const roomInput = document.getElementById("roomInput");
+        const joinButton = document.getElementById("joinButton");
 
         function currentRoom() {
-
-            return roomInput.value.trim() ||
-                "default";
+            return roomInput.value.trim() || "default";
         }
 
         function joinRoom() {
-
-            roomInput.value =
-                currentRoom();
-
-            myRoomId =
-                currentRoom();
-
+            roomInput.value = currentRoom();
+            myRoomId = currentRoom();
             enemyState = null;
-
+            hasEnemyConnected = false; // ルーム移動時にリセット
             resetOwnGame();
-
-            socket.emit(
-                "joinRoom",
-                currentRoom()
-            );
+            socket.emit("joinRoom", currentRoom());
         }
 
-        joinButton.addEventListener(
-            "click",
-            joinRoom
-        );
-
-        roomInput.addEventListener(
-            "keydown",
-            e => {
-                if (e.key === "Enter") {
-                    joinRoom();
-                }
+        joinButton.addEventListener("click", joinRoom);
+        roomInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") {
+                joinRoom();
             }
-        );
+        });
 
-        const canvas =
-            document.getElementById(
-                "gameCanvas"
-            );
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-        const ctx =
-            canvas.getContext("2d");
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
 
-        const WIDTH =
-            canvas.width;
-
-        const HEIGHT =
-            canvas.height;
-
-        // 1人分のパネル幅（自分側・相手側で共通、これを基準にフィールドを中央寄せする）
         const PANEL_WIDTH = WIDTH / 2;
-
-        // 相手側パネルを描画する際のXオフセット
         const ENEMY_OFFSET = PANEL_WIDTH;
 
-        // 盤面
         const FIELD_WIDTH = Math.min(500, PANEL_WIDTH - 40);
         const FIELD_X = (PANEL_WIDTH - FIELD_WIDTH) / 2;
 
-        // 重力
         const gravity = 0.75;
-
-        // ゲームオーバーライン
         const lineY = 120;
 
         let gameOver = false;
@@ -215,434 +161,176 @@
         let lastStateSentAt = 0;
         const STATE_SEND_INTERVAL = 100;
 
-        // 進行中の対戦の勝敗結果 ("WIN" / "LOSE" / "DRAW" / null)
         let matchResult = null;
-
-        // 現在自分がいるROOM ID と、ROOMごとの人数（roomListイベントで更新）
         let myRoomId = "default";
         let roomPlayerCounts = {};
 
+        // ★ 修正：相手のデータが届いたか、またはサーバー側が2人以上と判定しているかでマッチングを判断
+        let hasEnemyConnected = false;
+
         function isMatched() {
-            return (roomPlayerCounts[myRoomId] || 0) >= 2;
+            return hasEnemyConnected || (roomPlayerCounts[myRoomId] || 0) >= 2;
         }
 
-        // 同じ場所連打判定
         let lastDropX = -9999;
         let samePlaceCount = 0;
 
-        // サイズ（11段階）
-        const radiuses = [
-
-            0,
-            22,
-            30,
-            40,
-            52,
-            66,
-            82,
-            100,
-            122,
-            148,
-            178,
-            212
-        ];
-
-        // 色
+        const radiuses = [0, 22, 30, 40, 52, 66, 82, 100, 122, 148, 178, 212];
         const colors = [
-
-            "#ddd",
-            "#ff9aa2",
-            "#ffd97d",
-            "#f9f871",
-            "#8fd3ff",
-            "#98f5a5",
-            "#caa6ff",
-            "#ff9de1",
-            "#6fdd8b",
-            "#ffb86b",
-            "#7dd3fc",
-            "#f472b6"
+            "#ddd", "#ff9aa2", "#ffd97d", "#f9f871", "#8fd3ff",
+            "#98f5a5", "#caa6ff", "#ff9de1", "#6fdd8b", "#ffb86b",
+            "#7dd3fc", "#f472b6"
         ];
 
         class Ball {
-
-            constructor(
-                x,
-                y,
-                level
-            ) {
-
+            constructor(x, y, level) {
                 this.x = x;
                 this.y = y;
-
                 this.level = level;
-
-                this.radius =
-                    radiuses[level];
-
-                this.mass =
-                    Math.pow(
-                        level,
-                        3
-                    );
-
+                this.radius = radiuses[level];
+                this.mass = Math.pow(level, 3);
                 this.vx = 0;
                 this.vy = 0;
-
                 this.isNew = true;
-
                 this.spawnTimer = 15;
-
-                // お邪魔玉判定
                 this.isObstacle = false;
             }
 
             update() {
-
-                if (
-                    this.spawnTimer > 0
-                ) {
+                if (this.spawnTimer > 0) {
                     this.spawnTimer--;
                 }
 
                 this.vy += gravity;
 
-                // 落下速度制限
-                if (
-                    this.vy > 10
-                ) {
+                if (this.vy > 10) {
                     this.vy = 10;
                 }
 
                 this.x += this.vx;
                 this.y += this.vy;
 
-                const friction =
-                    0.92 +
-                    this.level *
-                    0.008;
-
+                const friction = 0.92 + this.level * 0.008;
                 this.vx *= friction;
 
-                if (
-
-                    Math.abs(
-                        this.vx
-                    ) < 0.05
-
-                    &&
-
-                    Math.abs(
-                        this.vy
-                    ) < 0.05
-                ) {
-
+                if (Math.abs(this.vx) < 0.05 && Math.abs(this.vy) < 0.05) {
                     this.vx = 0;
                     this.vy = 0;
                 }
 
-                // 床
-                if (
-
-                    this.y +
-                    this.radius >
-
-                    HEIGHT
-
-                ) {
-
-                    this.y =
-                        HEIGHT -
-                        this.radius;
-
+                if (this.y + this.radius > HEIGHT) {
+                    this.y = HEIGHT - this.radius;
                     this.vy *= -0.05;
-
                     this.vx *= 0.85;
-
-                    if (
-                        Math.abs(
-                            this.vy
-                        ) < 0.1
-                    ) {
+                    if (Math.abs(this.vy) < 0.1) {
                         this.vy = 0;
                     }
                 }
 
-                // 左壁
-                if (
-
-                    this.x -
-                    this.radius
-
-                    <
-
-                    FIELD_X
-
-                ) {
-
-                    this.x =
-                        FIELD_X +
-                        this.radius;
-
+                if (this.x - this.radius < FIELD_X) {
+                    this.x = FIELD_X + this.radius;
                     this.vx *= 0.2;
                 }
 
-                // 右壁
-                if (
-
-                    this.x +
-                    this.radius
-
-                    >
-
-                    FIELD_X +
-                    FIELD_WIDTH
-
-                ) {
-
-                    this.x =
-                        FIELD_X +
-                        FIELD_WIDTH -
-                        this.radius;
-
+                if (this.x + this.radius > FIELD_X + FIELD_WIDTH) {
+                    this.x = FIELD_X + FIELD_WIDTH - this.radius;
                     this.vx *= 0.2;
                 }
 
-                if (
-
-                    this.y -
-                    this.radius
-
-                    >
-
-                    lineY
-
-                ) {
+                if (this.y - this.radius > lineY) {
                     this.isNew = false;
                 }
             }
 
             draw() {
-
                 ctx.beginPath();
-
-                ctx.fillStyle =
-                    this.isObstacle
-                        ? "#444444"
-                        : colors[
-                        this.level
-                        ];
-
-                ctx.ellipse(
-                    this.x,
-                    this.y,
-                    this.radius,
-                    this.radius * 0.95,
-                    0,
-                    0,
-                    Math.PI * 2
-                );
-
-                ctx.fill();
-                ctx.beginPath();
-
-                ctx.fillStyle =
-                    "rgba(255,255,255,0.35)";
-
-                ctx.arc(
-                    this.x -
-                    this.radius * 0.3,
-
-                    this.y -
-                    this.radius * 0.3,
-
-                    this.radius * 0.25,
-
-                    0,
-                    Math.PI * 2
-                );
-
+                ctx.fillStyle = this.isObstacle ? "#444444" : colors[this.level];
+                ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.textAlign =
-                    "center";
+                ctx.beginPath();
+                ctx.fillStyle = "rgba(255,255,255,0.35)";
+                ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2);
+                ctx.fill();
 
-                ctx.textBaseline =
-                    "middle";
-
-                ctx.font =
-                    `${this.radius * 0.7}px sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = `${this.radius * 0.7}px sans-serif`;
 
                 if (this.isObstacle) {
-
-                    ctx.fillStyle =
-                        "white";
-
-                    ctx.fillText(
-                        "X",
-                        this.x,
-                        this.y
-                    );
-
+                    ctx.fillStyle = "white";
+                    ctx.fillText("X", this.x, this.y);
                 } else {
-
-                    ctx.fillStyle =
-                        "#5c4033";
-
-                    ctx.fillText(
-                        this.level,
-                        this.x,
-                        this.y
-                    );
+                    ctx.fillStyle = "#5c4033";
+                    ctx.fillText(this.level, this.x, this.y);
                 }
             }
         }
 
         let balls = [];
-
-        let currentX =
-            FIELD_X +
-            FIELD_WIDTH / 2;
-
-        let nextLevel =
-            randomLevel();
+        let currentX = FIELD_X + FIELD_WIDTH / 2;
+        let nextLevel = randomLevel();
 
         function resetOwnGame() {
-
             balls = [];
-
             score = 0;
-
             gameOver = false;
-
             matchResult = null;
-
-            nextLevel =
-                randomLevel();
-
-            currentX =
-                FIELD_X +
-                FIELD_WIDTH / 2;
-
+            nextLevel = randomLevel();
+            currentX = FIELD_X + FIELD_WIDTH / 2;
             lastDropX = -9999;
-
             samePlaceCount = 0;
         }
 
         function randomLevel() {
-
-            const r =
-                Math.random();
-
+            const r = Math.random();
             if (r < 0.40) return 1;
             if (r < 0.75) return 2;
             if (r < 0.95) return 3;
-
             return 4;
         }
 
         function setCurrentXFromClientX(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = WIDTH / rect.width;
+            let x = (clientX - rect.left) * scaleX;
 
-            const rect =
-                canvas.getBoundingClientRect();
-
-            const scaleX =
-                WIDTH / rect.width;
-
-            let x =
-                (clientX - rect.left) *
-                scaleX;
-
-            if (x < FIELD_X) {
-                x = FIELD_X;
-            }
-
-            if (x > FIELD_X + FIELD_WIDTH) {
-                x = FIELD_X + FIELD_WIDTH;
-            }
+            if (x < FIELD_X) x = FIELD_X;
+            if (x > FIELD_X + FIELD_WIDTH) x = FIELD_X + FIELD_WIDTH;
 
             currentX = x;
         }
 
-        canvas.addEventListener(
-            "mousemove",
-            e => {
-                setCurrentXFromClientX(
-                    e.clientX
-                );
-            }
-        );
+        canvas.addEventListener("mousemove", e => {
+            setCurrentXFromClientX(e.clientX);
+        });
 
-        canvas.addEventListener(
-            "touchmove",
-            e => {
-                e.preventDefault();
+        canvas.addEventListener("touchmove", e => {
+            e.preventDefault();
+            setCurrentXFromClientX(e.touches[0].clientX);
+        }, { passive: false });
 
-                setCurrentXFromClientX(
-                    e.touches[0].clientX
-                );
-            },
-            { passive: false }
-        );
+        canvas.addEventListener("touchstart", e => {
+            e.preventDefault();
+            setCurrentXFromClientX(e.touches[0].clientX);
+            dropCurrentBall();
+        }, { passive: false });
 
-        canvas.addEventListener(
-            "touchstart",
-            e => {
-                e.preventDefault();
-
-                setCurrentXFromClientX(
-                    e.touches[0].clientX
-                );
-
-                dropCurrentBall();
-            },
-            { passive: false }
-        );
-
-        canvas.addEventListener(
-            "click",
-            () => {
-                dropCurrentBall();
-            }
-        );
+        canvas.addEventListener("click", () => {
+            dropCurrentBall();
+        });
 
         function dropCurrentBall() {
-
+            if (!isMatched()) return; // 2人揃うまでは落とせない
             if (gameOver) return;
-            if (!isMatched()) return;
 
-            const radius =
-                radiuses[nextLevel];
+            const radius = radiuses[nextLevel];
+            let spawnX = currentX;
 
-            let spawnX =
-                currentX;
+            if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius;
+            if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_X + FIELD_WIDTH - radius;
 
-            if (
-                spawnX <
-                FIELD_X + radius
-            ) {
-                spawnX =
-                    FIELD_X + radius;
-            }
-
-            if (
-                spawnX >
-                FIELD_X +
-                FIELD_WIDTH -
-                radius
-            ) {
-                spawnX =
-                    FIELD_X +
-                    FIELD_WIDTH -
-                    radius;
-            }
-
-            if (
-                Math.abs(
-                    spawnX -
-                    lastDropX
-                ) < 25
-            ) {
+            if (Math.abs(spawnX - lastDropX) < 25) {
                 samePlaceCount++;
             } else {
                 samePlaceCount = 0;
@@ -650,270 +338,90 @@
 
             lastDropX = spawnX;
 
-            if (
-                samePlaceCount >= 5
-            ) {
-
-                const obstacleLevel =
-                    randomLevel();
-
-                const obstacleRadius =
-                    radiuses[
-                    obstacleLevel
-                    ];
-
-                const randomX =
-                    FIELD_X +
-                    obstacleRadius +
-                    Math.random() *
-                    (
-                        FIELD_WIDTH -
-                        obstacleRadius * 2
-                    );
-
-                const ojama =
-                    new Ball(
-                        randomX,
-                        50,
-                        obstacleLevel
-                    );
-
-                ojama.isObstacle =
-                    true;
-
-                balls.push(
-                    ojama
-                );
-
+            if (samePlaceCount >= 5) {
+                const obstacleLevel = randomLevel();
+                const obstacleRadius = radiuses[obstacleLevel];
+                const randomX = FIELD_X + obstacleRadius + Math.random() * (FIELD_WIDTH - obstacleRadius * 2);
+                const ojama = new Ball(randomX, 50, obstacleLevel);
+                ojama.isObstacle = true;
+                balls.push(ojama);
                 samePlaceCount = 0;
-
             } else {
-
-                const ball =
-                    new Ball(
-                        spawnX,
-                        50,
-                        nextLevel
-                    );
-
+                const ball = new Ball(spawnX, 50, nextLevel);
                 balls.push(ball);
             }
 
-            nextLevel =
-                randomLevel();
+            nextLevel = randomLevel();
+            sendGameState(); // 玉を落とした直後にも状態を即座に送信
         }
 
         function collide(a, b) {
-
-            const dx =
-                b.x - a.x;
-
-            const dy =
-                b.y - a.y;
-
-            const limit =
-                (
-                    a.radius +
-                    b.radius
-                ) * 0.98;
-
-            return (
-                dx * dx + dy * dy <
-                limit * limit
-            );
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const limit = (a.radius + b.radius) * 0.98;
+            return (dx * dx + dy * dy < limit * limit);
         }
 
         function getScore(level) {
-
             const scores = {
-
-                1: 10,
-                2: 30,
-                3: 60,
-                4: 100,
-                5: 200,
-                6: 400,
-                7: 800,
-                8: 2000,
-                9: 5000,
-                10: 12000,
-                11: 30000
+                1: 10, 2: 30, 3: 60, 4: 100, 5: 200,
+                6: 400, 7: 800, 8: 2000, 9: 5000, 10: 12000, 11: 30000
             };
-
             return scores[level] || 0;
         }
 
         function mergeBalls() {
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    const a = balls[i];
+                    const b = balls[j];
 
-            for (
-                let i = 0;
-                i < balls.length;
-                i++
-            ) {
+                    if (a.spawnTimer > 0 || b.spawnTimer > 0) continue;
+                    if (!collide(a, b)) continue;
 
-                for (
-                    let j = i + 1;
-                    j < balls.length;
-                    j++
-                ) {
+                    const dx = b.x - a.x;
+                    const dy = b.y - a.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    const a =
-                        balls[i];
+                    if (dist === 0) continue;
 
-                    const b =
-                        balls[j];
+                    const overlap = (a.radius + b.radius - dist) * 1.15;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    const push = overlap * 0.4;
 
-                    if (
-                        a.spawnTimer > 0 ||
-                        b.spawnTimer > 0
-                    ) {
-                        continue;
-                    }
+                    const totalMass = a.mass + b.mass;
+                    const ratioA = b.mass / totalMass;
+                    const ratioB = a.mass / totalMass;
 
-                    if (
-                        !collide(a, b)
-                    ) {
-                        continue;
-                    }
+                    a.x -= nx * push * ratioA;
+                    a.y -= ny * push * ratioA;
+                    b.x += nx * push * ratioB;
+                    b.y += ny * push * ratioB;
 
-                    const dx =
-                        b.x - a.x;
-
-                    const dy =
-                        b.y - a.y;
-
-                    const dist =
-                        Math.sqrt(
-                            dx * dx +
-                            dy * dy
-                        );
-
-                    if (
-                        dist === 0
-                    ) {
-                        continue;
-                    }
-
-                    const overlap =
-                        (
-                            a.radius +
-                            b.radius -
-                            dist
-                        ) * 1.15;
-
-                    const nx =
-                        dx / dist;
-
-                    const ny =
-                        dy / dist;
-
-                    const push =
-                        overlap * 0.4;
-
-                    const totalMass =
-                        a.mass +
-                        b.mass;
-
-                    const ratioA =
-                        b.mass /
-                        totalMass;
-
-                    const ratioB =
-                        a.mass /
-                        totalMass;
-                    a.x -=
-                        nx *
-                        push *
-                        ratioA;
-
-                    a.y -=
-                        ny *
-                        push *
-                        ratioA;
-
-                    b.x +=
-                        nx *
-                        push *
-                        ratioB;
-
-                    b.y +=
-                        ny *
-                        push *
-                        ratioB;
-
-                    a.vx -=
-                        nx *
-                        0.03 *
-                        ratioA;
-
-                    b.vx +=
-                        nx *
-                        0.03 *
-                        ratioB;
+                    a.vx -= nx * 0.03 * ratioA;
+                    b.vx += nx * 0.03 * ratioB;
 
                     a.vy *= 0.92;
                     b.vy *= 0.92;
 
-                    if (
-                        a.isObstacle ||
-                        b.isObstacle
-                    ) {
-                        continue;
-                    }
+                    if (a.isObstacle || b.isObstacle) continue;
 
-                    if (
-                        a.level ===
-                        b.level
-                    ) {
-
-                        if (
-                            a.level === 11
-                        ) {
-
-                            score +=
-                                10000;
-
+                    if (a.level === b.level) {
+                        if (a.level === 11) {
+                            score += 10000;
                             balls = [];
-
                             return;
                         }
 
-                        const newBall =
-                            new Ball(
-                                (
-                                    a.x +
-                                    b.x
-                                ) / 2,
-
-                                (
-                                    a.y +
-                                    b.y
-                                ) / 2,
-
-                                a.level + 1
-                            );
-
+                        const newBall = new Ball((a.x + b.x) / 2, (a.y + b.y) / 2, a.level + 1);
                         newBall.vy = -2;
 
-                        balls.splice(
-                            j,
-                            1
-                        );
+                        balls.splice(j, 1);
+                        balls.splice(i, 1);
+                        balls.push(newBall);
 
-                        balls.splice(
-                            i,
-                            1
-                        );
-
-                        balls.push(
-                            newBall
-                        );
-
-                        score +=
-                            getScore(
-                                newBall.level
-                            );
-
+                        score += getScore(newBall.level);
                         return;
                     }
                 }
@@ -921,624 +429,253 @@
         }
 
         function checkGameOver() {
-
-            for (
-                const ball
-                of balls
-            ) {
-
-                if (
-                    ball.isNew
-                ) {
-                    continue;
-                }
-
-                if (
-                    ball.y -
-                    ball.radius <
-                    lineY
-                ) {
+            for (const ball of balls) {
+                if (ball.isNew) continue;
+                if (ball.y - ball.radius < lineY) {
                     gameOver = true;
                 }
             }
         }
 
         function drawBackgroundDecor() {
-
-            ctx.fillStyle =
-                "rgba(255,255,255,0.25)";
-
-            for (
-                let i = 0;
-                i < 8;
-                i++
-            ) {
-
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            for (let i = 0; i < 8; i++) {
                 ctx.beginPath();
-
-                ctx.arc(
-                    60 + i * 90,
-                    80 +
-                    (i % 2) * 40,
-                    30,
-                    0,
-                    Math.PI * 2
-                );
-
+                ctx.arc(60 + i * 90, 80 + (i % 2) * 40, 30, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
 
         function drawField() {
-
-            ctx.fillStyle =
-                "#fffdf4";
-
-            ctx.fillRect(
-                FIELD_X,
-                0,
-                FIELD_WIDTH,
-                HEIGHT
-            );
+            ctx.fillStyle = "#fffdf4";
+            ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
         }
 
         function drawLine() {
-
-            ctx.strokeStyle =
-                "#ff7b7b";
-
+            ctx.strokeStyle = "#ff7b7b";
             ctx.lineWidth = 4;
-
             ctx.beginPath();
-
-            ctx.moveTo(
-                FIELD_X,
-                lineY
-            );
-
-            ctx.lineTo(
-                FIELD_X +
-                FIELD_WIDTH,
-                lineY
-            );
-
+            ctx.moveTo(FIELD_X, lineY);
+            ctx.lineTo(FIELD_X + FIELD_WIDTH, lineY);
             ctx.stroke();
         }
 
         function drawScore() {
-
-            ctx.fillStyle =
-                "#fff8ee";
-
-            ctx.fillRect(
-                20,
-                20,
-                140,
-                90
-            );
-
-            ctx.strokeStyle =
-                "#d8b98f";
-
+            ctx.fillStyle = "#fff8ee";
+            ctx.fillRect(20, 20, 140, 90);
+            ctx.strokeStyle = "#d8b98f";
             ctx.lineWidth = 4;
+            ctx.strokeRect(20, 20, 140, 90);
 
-            ctx.strokeRect(
-                20,
-                20,
-                140,
-                90
-            );
+            ctx.fillStyle = "#6b4f3f";
+            ctx.font = "24px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText("SCORE", 35, 50);
 
-            ctx.fillStyle =
-                "#6b4f3f";
-
-            ctx.font =
-                "24px sans-serif";
-
-            ctx.textAlign =
-                "left";
-
-            ctx.fillText(
-                "SCORE",
-                35,
-                50
-            );
-
-            ctx.font =
-                "32px sans-serif";
-
-            ctx.fillText(
-                score,
-                35,
-                88
-            );
+            ctx.font = "32px sans-serif";
+            ctx.fillText(score, 35, 88);
         }
 
         function drawNext() {
-
-            ctx.fillStyle =
-                "#fff8ee";
-
-            ctx.fillRect(
-                20,
-                140,
-                140,
-                170
-            );
-
-            ctx.strokeStyle =
-                "#d8b98f";
-
+            ctx.fillStyle = "#fff8ee";
+            ctx.fillRect(20, 140, 140, 170);
+            ctx.strokeStyle = "#d8b98f";
             ctx.lineWidth = 4;
+            ctx.strokeRect(20, 140, 140, 170);
 
-            ctx.strokeRect(
-                20,
-                140,
-                140,
-                170
-            );
+            ctx.fillStyle = "#6b4f3f";
+            ctx.font = "24px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("NEXT", 90, 180);
 
-            ctx.fillStyle =
-                "#6b4f3f";
-
-            ctx.font =
-                "24px sans-serif";
-
-            ctx.textAlign =
-                "center";
-
-            ctx.fillText(
-                "NEXT",
-                90,
-                180
-            );
-
-            const r =
-                radiuses[
-                nextLevel
-                ] * 0.6;
-
+            const r = radiuses[nextLevel] * 0.6;
             ctx.beginPath();
-
-            ctx.fillStyle =
-                colors[
-                nextLevel
-                ];
-
-            ctx.arc(
-                90,
-                245,
-                r,
-                0,
-                Math.PI * 2
-            );
-
+            ctx.fillStyle = colors[nextLevel];
+            ctx.arc(90, 245, r, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle =
-                "#5c4033";
-
-            ctx.font =
-                "26px sans-serif";
-
-            ctx.fillText(
-                nextLevel,
-                90,
-                245
-            );
+            ctx.fillStyle = "#5c4033";
+            ctx.font = "26px sans-serif";
+            ctx.fillText(nextLevel, 90, 245);
         }
 
         function serializeState() {
-
             return {
                 score,
                 gameOver,
                 nextLevel,
-                balls: balls.map(
-                    ball => ({
-                        x: ball.x,
-                        y: ball.y,
-                        level: ball.level,
-                        isObstacle: ball.isObstacle
-                    })
-                )
+                balls: balls.map(ball => ({
+                    x: ball.x,
+                    y: ball.y,
+                    level: ball.level,
+                    isObstacle: ball.isObstacle
+                }))
             };
         }
 
         function sendGameState() {
-
-            const now =
-                performance.now();
-
-            if (
-                now - lastStateSentAt <
-                STATE_SEND_INTERVAL
-            ) {
+            const now = performance.now();
+            if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
                 return;
             }
-
             lastStateSentAt = now;
-
-            socket.emit(
-                "gameState",
-                serializeState()
-            );
+            socket.emit("gameState", serializeState());
         }
 
-        socket.on(
-            "enemyState",
-            data => {
-                enemyState = data;
-                checkMatchResult();
-            }
-        );
+        // ★ 修正：相手からデータを受信したら、強制的に対戦相手が存在するフラグをONにする
+        socket.on("enemyState", data => {
+            enemyState = data;
+            hasEnemyConnected = true;
+            checkMatchResult();
+        });
 
-        // 自分・相手どちらかがゲームオーバーになった時点で勝敗を決定する
         function checkMatchResult() {
-
-            if (matchResult) {
-                return;
-            }
-
-            if (!enemyState) {
-                return;
-            }
+            if (matchResult || !enemyState) return;
 
             if (enemyState.gameOver && !gameOver) {
-
-                // 相手が先にトップアウト -> 自分の勝ち（このタイミングで自分の対戦も終了させる）
                 matchResult = "WIN";
                 gameOver = true;
-
             } else if (enemyState.gameOver && gameOver) {
-
-                // 両者ゲームオーバー -> スコアで比較
-                if (score > enemyState.score) {
-                    matchResult = "WIN";
-                } else if (score < enemyState.score) {
-                    matchResult = "LOSE";
-                } else {
-                    matchResult = "DRAW";
-                }
-
+                if (score > enemyState.score) matchResult = "WIN";
+                else if (score < enemyState.score) matchResult = "LOSE";
+                else matchResult = "DRAW";
             } else if (!enemyState.gameOver && gameOver) {
-
-                // 自分が先にトップアウト -> 自分の負け
                 matchResult = "LOSE";
             }
         }
 
-        const roomListEl =
-            document.getElementById(
-                "roomList"
-            );
+        const roomListEl = document.getElementById("roomList");
 
         function renderRoomList(list) {
-
             roomPlayerCounts = {};
-
             for (const room of list || []) {
                 roomPlayerCounts[room.id] = room.count;
             }
 
             roomListEl.innerHTML = "";
-
             if (!list || list.length === 0) {
-
-                const empty =
-                    document.createElement("span");
-
-                empty.className =
-                    "room-empty";
-
-                empty.textContent =
-                    "現在アクティブなROOMはありません";
-
+                const empty = document.createElement("span");
+                empty.className = "room-empty";
+                empty.textContent = "現在アクティブなROOMはありません";
                 roomListEl.appendChild(empty);
-
                 return;
             }
 
             for (const room of list) {
-
-                const chip =
-                    document.createElement("button");
-
+                const chip = document.createElement("button");
                 chip.type = "button";
-
-                chip.className =
-                    "room-chip" +
-                    (
-                        room.id === currentRoom()
-                            ? " current"
-                            : ""
-                    );
-
-                chip.textContent =
-                    `${room.id} (${room.count}人)`;
-
-                chip.addEventListener(
-                    "click",
-                    () => {
-                        roomInput.value = room.id;
-                        joinRoom();
-                    }
-                );
-
+                chip.className = "room-chip" + (room.id === currentRoom() ? " current" : "");
+                chip.textContent = `${room.id} (${room.count}人)`;
+                chip.addEventListener("click", () => {
+                    roomInput.value = room.id;
+                    joinRoom();
+                });
                 roomListEl.appendChild(chip);
             }
         }
 
-        socket.on(
-            "roomList",
-            renderRoomList
-        );
+        // 念のため両方のイベント名に対応
+        socket.on("roomList", renderRoomList);
+        socket.on("rooms", renderRoomList);
 
         function drawEnemyField() {
+            const eFieldX = FIELD_X + ENEMY_OFFSET;
+            ctx.fillStyle = "#fffdf4";
+            ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT);
 
-            // 相手側パネルの基準X（自分の盤面と同じ形・同じ縮尺で右側に描画する）
-            const eFieldX =
-                FIELD_X + ENEMY_OFFSET;
-
-            // 背景（自分の盤面と同じ見た目）
-            ctx.fillStyle =
-                "#fffdf4";
-
-            ctx.fillRect(
-                eFieldX,
-                0,
-                FIELD_WIDTH,
-                HEIGHT
-            );
-
-            // ゲームオーバーライン
-            ctx.strokeStyle =
-                "#ff7b7b";
-
+            ctx.strokeStyle = "#ff7b7b";
             ctx.lineWidth = 4;
-
             ctx.beginPath();
-
-            ctx.moveTo(
-                eFieldX,
-                lineY
-            );
-
-            ctx.lineTo(
-                eFieldX + FIELD_WIDTH,
-                lineY
-            );
-
+            ctx.moveTo(eFieldX, lineY);
+            ctx.lineTo(eFieldX + FIELD_WIDTH, lineY);
             ctx.stroke();
 
-            // ラベル・スコアパネル
-            ctx.fillStyle =
-                "#fff8ee";
-
-            ctx.fillRect(
-                ENEMY_OFFSET + 20,
-                20,
-                140,
-                90
-            );
-
-            ctx.strokeStyle =
-                "#d8b98f";
-
+            ctx.fillStyle = "#fff8ee";
+            ctx.fillRect(ENEMY_OFFSET + 20, 20, 140, 90);
+            ctx.strokeStyle = "#d8b98f";
             ctx.lineWidth = 4;
+            ctx.strokeRect(ENEMY_OFFSET + 20, 20, 140, 90);
 
-            ctx.strokeRect(
-                ENEMY_OFFSET + 20,
-                20,
-                140,
-                90
-            );
+            ctx.fillStyle = "#6b4f3f";
+            ctx.font = "24px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText("ENEMY", ENEMY_OFFSET + 35, 50);
 
-            ctx.fillStyle =
-                "#6b4f3f";
-
-            ctx.font =
-                "24px sans-serif";
-
-            ctx.textAlign =
-                "left";
-
-            ctx.fillText(
-                "ENEMY",
-                ENEMY_OFFSET + 35,
-                50
-            );
-
-            ctx.font =
-                "32px sans-serif";
-
-            ctx.fillText(
-                enemyState ? (enemyState.score || 0) : 0,
-                ENEMY_OFFSET + 35,
-                88
-            );
+            ctx.font = "32px sans-serif";
+            ctx.fillText(enemyState ? (enemyState.score || 0) : 0, ENEMY_OFFSET + 35, 88);
 
             if (!enemyState) {
-
-                ctx.fillStyle =
-                    "#6b4f3f";
-
-                ctx.font =
-                    "22px sans-serif";
-
-                ctx.textAlign =
-                    "center";
-
-                ctx.fillText(
-                    "WAITING",
-                    eFieldX + FIELD_WIDTH / 2,
-                    HEIGHT / 2
-                );
-
+                ctx.fillStyle = "#6b4f3f";
+                ctx.font = "22px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("WAITING", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2);
                 return;
             }
 
-            // 相手のボールを自分と同じ縮尺（等倍）で描画
-            for (
-                const ball
-                of enemyState.balls || []
-            ) {
-
-                const radius =
-                    radiuses[ball.level] || 10;
-
-                const x =
-                    eFieldX +
-                    (ball.x - FIELD_X);
-
-                const y =
-                    ball.y;
+            for (const ball of enemyState.balls || []) {
+                const radius = radiuses[ball.level] || 10;
+                const x = eFieldX + (ball.x - FIELD_X);
+                const y = ball.y;
 
                 ctx.beginPath();
-
-                ctx.fillStyle =
-                    ball.isObstacle
-                        ? "#444444"
-                        : colors[ball.level] || "#ddd";
-
-                ctx.ellipse(
-                    x,
-                    y,
-                    radius,
-                    radius * 0.95,
-                    0,
-                    0,
-                    Math.PI * 2
-                );
-
+                ctx.fillStyle = ball.isObstacle ? "#444444" : colors[ball.level] || "#ddd";
+                ctx.ellipse(x, y, radius, radius * 0.95, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.textAlign =
-                    "center";
-
-                ctx.textBaseline =
-                    "middle";
-
-                ctx.font =
-                    `${radius * 0.7}px sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = `${radius * 0.7}px sans-serif`;
 
                 if (ball.isObstacle) {
-
-                    ctx.fillStyle =
-                        "white";
-
-                    ctx.fillText(
-                        "X",
-                        x,
-                        y
-                    );
-
+                    ctx.fillStyle = "white";
+                    ctx.fillText("X", x, y);
                 } else {
-
-                    ctx.fillStyle =
-                        "#5c4033";
-
-                    ctx.fillText(
-                        ball.level,
-                        x,
-                        y
-                    );
+                    ctx.fillStyle = "#5c4033";
+                    ctx.fillText(ball.level, x, y);
                 }
             }
 
             if (enemyState.gameOver) {
-
-                ctx.fillStyle =
-                    "rgba(0,0,0,0.55)";
-
-                ctx.fillRect(
-                    eFieldX,
-                    0,
-                    FIELD_WIDTH,
-                    HEIGHT
-                );
-
-                ctx.fillStyle =
-                    "white";
-
-                ctx.font =
-                    "50px sans-serif";
-
-                ctx.textAlign =
-                    "center";
-
-                ctx.fillText(
-                    "GAME OVER",
-                    eFieldX + FIELD_WIDTH / 2,
-                    HEIGHT / 2
-                );
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT);
+                ctx.fillStyle = "white";
+                ctx.font = "50px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2);
             }
         }
 
         function drawDropPreview() {
-
-            const r =
-                radiuses[
-                nextLevel
-                ];
-
-            ctx.globalAlpha =
-                0.3;
-
+            if (gameOver || !isMatched()) return;
+            const r = radiuses[nextLevel];
+            ctx.globalAlpha = 0.3;
             ctx.beginPath();
-
-            ctx.fillStyle =
-                colors[
-                nextLevel
-                ];
-
-            ctx.arc(
-                currentX,
-                50,
-                r,
-                0,
-                Math.PI * 2
-            );
-
+            ctx.fillStyle = colors[nextLevel];
+            ctx.arc(currentX, 50, r, 0, Math.PI * 2);
             ctx.fill();
-
-            ctx.globalAlpha =
-                1;
+            ctx.globalAlpha = 1;
         }
 
         function update() {
+            // 定期的に自分の状態を送信（相手側に自分を認識させるため、マッチ前でも送る）
+            sendGameState();
 
-            if (gameOver) return;
-            if (!isMatched()) return;
+            if (!isMatched() || gameOver) return;
 
-            for (
-                const ball
-                of balls
-            ) {
+            for (const ball of balls) {
                 ball.update();
             }
 
-            for (
-                let k = 0;
-                k < 10;
-                k++
-            ) {
+            for (let k = 0; k < 10; k++) {
                 mergeBalls();
             }
 
             checkGameOver();
             checkMatchResult();
-            sendGameState();
         }
 
         function draw() {
-
-            ctx.clearRect(
-                0,
-                0,
-                WIDTH,
-                HEIGHT
-            );
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             drawBackgroundDecor();
             drawField();
@@ -1547,140 +684,55 @@
             drawNext();
             drawEnemyField();
 
-            if (isMatched()) {
-                drawDropPreview();
-            }
+            drawDropPreview();
 
-            for (
-                const ball
-                of balls
-            ) {
+            for (const ball of balls) {
                 ball.draw();
             }
 
-            if (gameOver) {
+            // ★ 修正：2人揃っていない（isMatchedがfalse）の時だけ待機画面を被せる
+            if (!isMatched()) {
+                ctx.fillStyle = "rgba(0,0,0,0.5)";
+                ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
-                ctx.fillStyle =
-                    "rgba(0,0,0,0.55)";
+                ctx.fillStyle = "white";
+                ctx.font = "28px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("待機中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 16);
 
-                ctx.fillRect(
-                    FIELD_X,
-                    0,
-                    FIELD_WIDTH,
-                    HEIGHT
-                );
+                ctx.font = "18px sans-serif";
+                ctx.fillText("対戦相手が参加するとスタートします", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 20);
+            }
+            else if (gameOver) {
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
 
-                ctx.fillStyle =
-                    "white";
-
-                ctx.font =
-                    "50px sans-serif";
-
-                ctx.textAlign =
-                    "center";
-
-                ctx.fillText(
-                    "GAME OVER",
-                    FIELD_X +
-                    FIELD_WIDTH / 2,
-                    HEIGHT / 2
-                );
+                ctx.fillStyle = "white";
+                ctx.font = "50px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
 
                 if (matchResult) {
-
-                    const resultText =
-                        matchResult === "WIN"
-                            ? "YOU WIN!"
-                            : matchResult === "LOSE"
-                                ? "YOU LOSE"
-                                : "DRAW";
-
-                    ctx.fillStyle =
-                        matchResult === "WIN"
-                            ? "#ffd97d"
-                            : matchResult === "LOSE"
-                                ? "#ff9aa2"
-                                : "#ffffff";
-
-                    ctx.font =
-                        "40px sans-serif";
-
-                    ctx.fillText(
-                        resultText,
-                        FIELD_X +
-                        FIELD_WIDTH / 2,
-                        HEIGHT / 2 + 60
-                    );
-
+                    const resultText = matchResult === "WIN" ? "YOU WIN!" : matchResult === "LOSE" ? "YOU LOSE" : "DRAW";
+                    ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
+                    ctx.font = "40px sans-serif";
+                    ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 60);
                 } else if (enemyState && !enemyState.gameOver) {
-
-                    ctx.fillStyle =
-                        "#ffffff";
-
-                    ctx.font =
-                        "22px sans-serif";
-
-                    ctx.fillText(
-                        "相手のプレイ中...",
-                        FIELD_X +
-                        FIELD_WIDTH / 2,
-                        HEIGHT / 2 + 50
-                    );
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "22px sans-serif";
+                    ctx.fillText("相手のプレイ中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 50);
                 }
-            } else if (!isMatched()) {
-
-                ctx.fillStyle =
-                    "rgba(0,0,0,0.5)";
-
-                ctx.fillRect(
-                    FIELD_X,
-                    0,
-                    FIELD_WIDTH,
-                    HEIGHT
-                );
-
-                ctx.fillStyle =
-                    "white";
-
-                ctx.font =
-                    "28px sans-serif";
-
-                ctx.textAlign =
-                    "center";
-
-                ctx.fillText(
-                    "待機中...",
-                    FIELD_X +
-                    FIELD_WIDTH / 2,
-                    HEIGHT / 2 - 16
-                );
-
-                ctx.font =
-                    "18px sans-serif";
-
-                ctx.fillText(
-                    "対戦相手が参加するとスタートします",
-                    FIELD_X +
-                    FIELD_WIDTH / 2,
-                    HEIGHT / 2 + 20
-                );
             }
         }
 
         function loop() {
-
             update();
             draw();
-
-            requestAnimationFrame(
-                loop
-            );
+            requestAnimationFrame(loop);
         }
 
         joinRoom();
         loop();
-
-
     </script>
 </body>
 </html>
