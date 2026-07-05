@@ -474,8 +474,8 @@
         });
 
         function dropCurrentBall() {
-            if (gameOver) return; // 自分が死んでたら落とせない
-            if (matchResult) return; // 勝負がついてたら落とせない
+            if (gameOver) return;
+            if (matchResult) return;
             if (!isMatched()) return;
 
             const radius = radiuses[nextLevel];
@@ -680,11 +680,12 @@
             checkMatchResult();
         });
 
+        // 👑 リアルタイム追い上げに対応した完璧なマトリクス判定
         function checkMatchResult() {
             if (matchResult) return;
             if (!enemyState) return;
 
-            // お互いがゲームオーバーになった場合、最終判定
+            // ケース1: お互いがゲームオーバーになった場合（完全決着）
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -694,11 +695,18 @@
                     matchResult = "DRAW";
                 }
             }
-            // 自分がまだ生きているが、相手が先に力尽きた場合
+            // ケース2: 自分は生きているが、相手が先にゲームオーバーになった場合
             else if (!gameOver && enemyState.gameOver) {
-                // 既に相手のスコアを上回っていたら、その瞬間にリアルタイムでWIN確定！
+                // プレイ中にコツコツ追い上げて、相手のスコアを1点でも上回った瞬間にWIN確定！
                 if (score > enemyState.score) {
                     matchResult = "WIN";
+                }
+            }
+            // ケース3: 自分はゲームオーバーになったが、相手がまだ生きている場合
+            else if (gameOver && !enemyState.gameOver) {
+                // 相手が自分のスコアを上回った瞬間に自分のLOSE確定
+                if (enemyState.score > score) {
+                    matchResult = "LOSE";
                 }
             }
         }
@@ -780,12 +788,11 @@
             ctx.globalAlpha = 1;
         }
 
-        // 🌟 物理演算が相手の死亡に巻き込まれないように100%完全独立
         function update() {
             if (!isInGameMode) return;
             if (!isMatched()) return;
 
-            // 自分がまだゲームオーバーになっておらず、かつ勝敗が決まっていないなら物理演算をする
+            // 自分がまだ死んでおらず、勝敗が決まっていない間は絶対に物理が動く
             if (!gameOver && !matchResult) {
                 for (const ball of balls) {
                     ball.update();
@@ -798,7 +805,7 @@
                 checkGameOver();
             }
 
-            // 通信と判定は、自分が死んでいようが相手が死んでいようが、毎フレーム必ず回す
+            // 通信と勝敗チェックは死んでいても毎秒必ず回す
             checkMatchResult();
             sendGameState();
         }
@@ -814,7 +821,6 @@
             drawNext();
             drawEnemyField();
 
-            // 勝負がついておらず、自分が生きている時だけ予測線・予告を出す
             if (isMatched() && !gameOver && !matchResult) {
                 drawDropPreview();
             }
