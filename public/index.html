@@ -384,7 +384,8 @@
                     this.vx *= 0.2;
                 }
 
-                if (this.y - this.radius > lineY) {
+                // 【修正箇所】中心がラインより下（+半径分）に落ちたら「生まれたて状態」を解除
+                if (this.y > lineY + this.radius) {
                     this.isNew = false;
                 }
             }
@@ -580,12 +581,18 @@
             }
         }
 
+        // 【修正箇所】出現時即死バグを防止する厳密なゲームオーバー判定
         function checkGameOver() {
             if (gameOver) return;
             for (const ball of balls) {
+                // 生まれたてフルーツは除外
                 if (ball.isNew) continue;
-                if (ball.y - ball.radius < lineY) {
-                    gameOver = true;
+
+                // フルーツが静止（または迫り上がり）していて、かつラインを上にはみ出しているか
+                if (ball.y > lineY && (ball.y - ball.radius) < lineY) {
+                    if (Math.abs(ball.vy) < 0.5) {
+                        gameOver = true;
+                    }
                 }
             }
         }
@@ -677,15 +684,12 @@
         socket.on("enemyState", data => {
             if (!isInGameMode) return;
             enemyState = data;
-            checkMatchResult();
         });
 
-        // 👑 リアルタイム追い上げに対応した完璧なマトリクス判定
         function checkMatchResult() {
             if (matchResult) return;
             if (!enemyState) return;
 
-            // ケース1: お互いがゲームオーバーになった場合（完全決着）
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -694,20 +698,21 @@
                 } else {
                     matchResult = "DRAW";
                 }
+                return;
             }
-            // ケース2: 自分は生きているが、相手が先にゲームオーバーになった場合
-            else if (!gameOver && enemyState.gameOver) {
-                // プレイ中にコツコツ追い上げて、相手のスコアを1点でも上回った瞬間にWIN確定！
+
+            if (!gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
                 }
+                return;
             }
-            // ケース3: 自分はゲームオーバーになったが、相手がまだ生きている場合
-            else if (gameOver && !enemyState.gameOver) {
-                // 相手が自分のスコアを上回った瞬間に自分のLOSE確定
+
+            if (gameOver && !enemyState.gameOver) {
                 if (enemyState.score > score) {
                     matchResult = "LOSE";
                 }
+                return;
             }
         }
 
@@ -788,11 +793,27 @@
             ctx.globalAlpha = 1;
         }
 
+        function drawDebugInfo() {
+            ctx.fillStyle = "#000000";
+            ctx.font = "14px monospace";
+            ctx.textAlign = "left";
+
+            let myStatus = gameOver ? "DEAD" : "ALIVE";
+            let enemyStatus = "NOT CONNECTED";
+            let enemyScoreText = "N/A";
+
+            if (enemyState) {
+                enemyStatus = enemyState.gameOver ? "DEAD" : "ALIVE";
+                enemyScoreText = enemyState.score;
+            }
+
+            ctx.fillText(`[DEBUG] ME:${myStatus}(S:${score}) | ENEMY:${enemyStatus}(S:${enemyScoreText}) | RESULT:${matchResult || "NONE"}`, 20, HEIGHT - 20);
+        }
+
         function update() {
             if (!isInGameMode) return;
             if (!isMatched()) return;
 
-            // 自分がまだ死んでおらず、勝敗が決まっていない間は絶対に物理が動く
             if (!gameOver && !matchResult) {
                 for (const ball of balls) {
                     ball.update();
@@ -805,7 +826,6 @@
                 checkGameOver();
             }
 
-            // 通信と勝敗チェックは死んでいても毎秒必ず回す
             checkMatchResult();
             sendGameState();
         }
@@ -864,6 +884,8 @@
                 ctx.font = "18px sans-serif";
                 ctx.fillText("対戦相手が参加するとスタートします", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 20);
             }
+
+            drawDebugInfo();
         }
 
         function loop() {
