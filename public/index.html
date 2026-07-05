@@ -284,10 +284,12 @@
         const roomListEl = document.getElementById("roomList");
 
         let activeRoomsRawList = []; // サーバーから届いた生データを保持
+        let isInGameMode = false;    // 🌟 ゲームモード（部屋の中）に入ったかどうかの絶対フラグ
 
         // 部屋に入室完了したときに呼ばれる画面切り替え関数
         function enterGameRoom(roomName) {
             myRoomId = roomName;
+            isInGameMode = true; // ゲームモード突入
             socket.emit("joinRoom", myRoomId);
 
             // ロビーを消してゲーム画面を出す
@@ -405,17 +407,22 @@
         let matchResult = null;
         let myRoomId = "default";
 
-        // 🌟 確実にマッチングを固定するためのフラグを追加
-        let isMatchStarted = false;
+        // 🌟 相手が1回でも接続されたかどうかの判定用
+        let isEnemyConnectedOnce = false;
 
         function isMatched() {
-            // 既に一度ゲームが始まっている、あるいは相手のデータがある、あるいは部屋に2人以上いるならマッチしたとみなす
-            if (isMatchStarted) return true;
+            // すでに相手のデータが届いている、もしくは届いたことがあれば確実にマッチ
+            if (enemyState !== null) {
+                isEnemyConnectedOnce = true;
+                return true;
+            }
+            if (isEnemyConnectedOnce) return true;
 
+            // 部屋データからの補正（バックアップ判定）
             const currentRoomData = activeRoomsRawList.find(r => r.id === myRoomId);
             const counts = currentRoomData ? currentRoomData.count : 0;
-            if (enemyState !== null || counts >= 2) {
-                isMatchStarted = true; // 一度マッチしたらtrueで固定
+            if (counts >= 2) {
+                isEnemyConnectedOnce = true;
                 return true;
             }
             return false;
@@ -530,7 +537,7 @@
             lastDropX = -9999;
             samePlaceCount = 0;
             enemyState = null;
-            isMatchStarted = false; // 初期化
+            isEnemyConnectedOnce = false; // 初期化
         }
 
         function randomLevel() {
@@ -553,18 +560,18 @@
         }
 
         canvas.addEventListener("mousemove", e => {
-            if (lobbyScreen.style.display === "none") setCurrentXFromClientX(e.clientX);
+            if (isInGameMode) setCurrentXFromClientX(e.clientX);
         });
 
         canvas.addEventListener("touchmove", e => {
-            if (lobbyScreen.style.display === "none") {
+            if (isInGameMode) {
                 e.preventDefault();
                 setCurrentXFromClientX(e.touches[0].clientX);
             }
         }, { passive: false });
 
         canvas.addEventListener("touchstart", e => {
-            if (lobbyScreen.style.display === "none") {
+            if (isInGameMode) {
                 e.preventDefault();
                 setCurrentXFromClientX(e.touches[0].clientX);
                 dropCurrentBall();
@@ -572,7 +579,7 @@
         }, { passive: false });
 
         canvas.addEventListener("click", () => {
-            if (lobbyScreen.style.display === "none") dropCurrentBall();
+            if (isInGameMode) dropCurrentBall();
         });
 
         function dropCurrentBall() {
@@ -767,7 +774,9 @@
         }
 
         function sendGameState() {
-            if (lobbyScreen.style.display !== "none") return;
+            // 🌟 修正ポイント：部屋リストに関係なく、ゲームモード中なら「常に」データを送り続ける
+            if (!isInGameMode) return;
+
             const now = performance.now();
             if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
                 return;
@@ -777,7 +786,7 @@
         }
 
         socket.on("enemyState", data => {
-            if (lobbyScreen.style.display !== "none") return;
+            if (!isInGameMode) return;
             enemyState = data;
             checkMatchResult();
         });
@@ -880,7 +889,7 @@
         }
 
         function update() {
-            if (lobbyScreen.style.display !== "none") return;
+            if (!isInGameMode) return; // ロビー中は何もしない
             if (gameOver) return;
             if (!isMatched()) return;
 
@@ -898,7 +907,7 @@
         }
 
         function draw() {
-            if (lobbyScreen.style.display !== "none") return;
+            if (!isInGameMode) return; // ロビー中は何もしない
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             drawBackgroundDecor();
@@ -916,7 +925,6 @@
                 ball.draw();
             }
 
-            // 🌟 修正箇所：勝敗条件（matchResult）がある場合は isMatched の状態にかかわらず最優先で描画
             if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -927,7 +935,6 @@
                 ctx.font = "bold 60px sans-serif";
                 ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
             }
-            // まだ勝敗は決まっていないが、自分だけがゲームオーバーした時
             else if (gameOver) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -943,7 +950,6 @@
                     ctx.fillText("相手のプレイ中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 40);
                 }
             }
-            // まだマッチングしていない（待機中）とき
             else if (!isMatched()) {
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
