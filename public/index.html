@@ -284,22 +284,20 @@
         const roomListEl = document.getElementById("roomList");
 
         let activeRoomsRawList = []; // サーバーから届いた生データを保持
-        let isInGameMode = false;    // 🌟 ゲームモード（部屋の中）に入ったかどうかの絶対フラグ
+        let isInGameMode = false;    // ゲームモード（部屋の中）に入ったかどうかの絶対フラグ
 
         // 部屋に入室完了したときに呼ばれる画面切り替え関数
         function enterGameRoom(roomName) {
             myRoomId = roomName;
-            isInGameMode = true; // ゲームモード突入
+            isInGameMode = true;
             socket.emit("joinRoom", myRoomId);
 
-            // ロビーを消してゲーム画面を出す
             lobbyScreen.style.display = "none";
             gameScreen.style.display = "block";
 
             resetOwnGame();
         }
 
-        // ダイブ（通常入室）ボタン
         joinButton.addEventListener("click", () => {
             const targetRoom = roomInput.value.trim() || "default";
             enterGameRoom(targetRoom);
@@ -312,20 +310,16 @@
             }
         });
 
-        // クイックマッチボタンの処理
         quickMatchBtn.addEventListener("click", () => {
-            // 現在1人の部屋（空き枠あり）をさがす
             const availableRoom = activeRoomsRawList.find(r => r.count === 1);
             if (availableRoom) {
                 enterGameRoom(availableRoom.id);
             } else {
-                // なければランダムな部屋名を自動生成して新しく作成
                 const randomRoomName = "ocean-" + Math.floor(1000 + Math.random() * 9000);
                 enterGameRoom(randomRoomName);
             }
         });
 
-        // サーバーから届いたお部屋リストをカード化して描画
         function renderRoomList(list) {
             activeRoomsRawList = list || [];
             roomListEl.innerHTML = "";
@@ -341,10 +335,8 @@
             for (const room of activeRoomsRawList) {
                 const card = document.createElement("div");
                 const isFull = room.count >= 2;
-
                 card.className = "room-card " + (isFull ? "full" : "recruiting");
 
-                // カード内部情報
                 const infoBox = document.createElement("div");
                 infoBox.className = "room-card-info";
 
@@ -359,7 +351,6 @@
                 infoBox.appendChild(nameStr);
                 infoBox.appendChild(statusStr);
 
-                // 参加ボタン
                 const btn = document.createElement("button");
                 btn.type = "button";
                 btn.className = "room-card-btn";
@@ -406,19 +397,15 @@
 
         let matchResult = null;
         let myRoomId = "default";
-
-        // 🌟 相手が1回でも接続されたかどうかの判定用
         let isEnemyConnectedOnce = false;
 
         function isMatched() {
-            // すでに相手のデータが届いている、もしくは届いたことがあれば確実にマッチ
             if (enemyState !== null) {
                 isEnemyConnectedOnce = true;
                 return true;
             }
             if (isEnemyConnectedOnce) return true;
 
-            // 部屋データからの補正（バックアップ判定）
             const currentRoomData = activeRoomsRawList.find(r => r.id === myRoomId);
             const counts = currentRoomData ? currentRoomData.count : 0;
             if (counts >= 2) {
@@ -458,10 +445,7 @@
                 }
 
                 this.vy += gravity;
-
-                if (this.vy > 10) {
-                    this.vy = 10;
-                }
+                if (this.vy > 10) this.vy = 10;
 
                 this.x += this.vx;
                 this.y += this.vy;
@@ -478,16 +462,13 @@
                     this.y = HEIGHT - this.radius;
                     this.vy *= -0.05;
                     this.vx *= 0.85;
-                    if (Math.abs(this.vy) < 0.1) {
-                        this.vy = 0;
-                    }
+                    if (Math.abs(this.vy) < 0.1) this.vy = 0;
                 }
 
                 if (this.x - this.radius < FIELD_X) {
                     this.x = FIELD_X + this.radius;
                     this.vx *= 0.2;
                 }
-
                 if (this.x + this.radius > FIELD_X + FIELD_WIDTH) {
                     this.x = FIELD_X + FIELD_WIDTH - this.radius;
                     this.vx *= 0.2;
@@ -537,7 +518,7 @@
             lastDropX = -9999;
             samePlaceCount = 0;
             enemyState = null;
-            isEnemyConnectedOnce = false; // 初期化
+            isEnemyConnectedOnce = false;
         }
 
         function randomLevel() {
@@ -774,13 +755,9 @@
         }
 
         function sendGameState() {
-            // 🌟 修正ポイント：部屋リストに関係なく、ゲームモード中なら「常に」データを送り続ける
             if (!isInGameMode) return;
-
             const now = performance.now();
-            if (now - lastStateSentAt < STATE_SEND_INTERVAL) {
-                return;
-            }
+            if (now - lastStateSentAt < STATE_SEND_INTERVAL) return;
             lastStateSentAt = now;
             socket.emit("gameState", serializeState());
         }
@@ -791,14 +768,13 @@
             checkMatchResult();
         });
 
+        // 🌟 修正の要：完全な勝敗ロジックに変更
         function checkMatchResult() {
             if (matchResult) return;
             if (!enemyState) return;
 
-            if (enemyState.gameOver && !gameOver) {
-                matchResult = "WIN";
-                gameOver = true;
-            } else if (enemyState.gameOver && gameOver) {
+            // 👑 お互いがゲームオーバーになった時だけ、最終スコアで決着を付ける！
+            if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
                 } else if (score < enemyState.score) {
@@ -806,9 +782,15 @@
                 } else {
                     matchResult = "DRAW";
                 }
-            } else if (!enemyState.gameOver && gameOver) {
-                matchResult = "LOSE";
             }
+            // 自分がまだ生きているのに、相手が先に死んだ時
+            else if (!gameOver && enemyState.gameOver) {
+                // もし現時点で相手のスコアを上回っていれば、その瞬間に勝利確定にしてあげても良い
+                if (score > enemyState.score) {
+                    matchResult = "WIN";
+                }
+            }
+            // 自分が先に死んで、相手がまだプレイ中の時は matchResult は null のまま（待機）にする
         }
 
         function drawEnemyField() {
@@ -889,7 +871,7 @@
         }
 
         function update() {
-            if (!isInGameMode) return; // ロビー中は何もしない
+            if (!isInGameMode) return;
             if (gameOver) return;
             if (!isMatched()) return;
 
@@ -907,7 +889,7 @@
         }
 
         function draw() {
-            if (!isInGameMode) return; // ロビー中は何もしない
+            if (!isInGameMode) return;
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             drawBackgroundDecor();
@@ -925,6 +907,7 @@
                 ball.draw();
             }
 
+            // 👑 表示ロジックのアップデート
             if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -935,6 +918,7 @@
                 ctx.font = "bold 60px sans-serif";
                 ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
             }
+            // 自分が死んだけど、相手がまだプレイ中のとき（勝敗を決めずに待つ）
             else if (gameOver) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -944,11 +928,9 @@
                 ctx.font = "50px sans-serif";
                 ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 30);
 
-                if (enemyState && !enemyState.gameOver) {
-                    ctx.fillStyle = "#ffffff";
-                    ctx.font = "22px sans-serif";
-                    ctx.fillText("相手のプレイ中...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 40);
-                }
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "22px sans-serif";
+                ctx.fillText("相手のプレイ終了を待っています...", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 40);
             }
             else if (!isMatched()) {
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
