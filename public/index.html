@@ -345,7 +345,6 @@
 
                 if (!myRematchRequested) {
                     myRematchRequested = true;
-                    // ボタンを押したら即座に送信
                     sendGameState(true);
                 }
                 return true;
@@ -556,7 +555,6 @@
             socket.emit("gameState", serializeState());
         }
 
-        // ★ 修正: データの受信処理を書き換え、勝敗後も必ず再戦希望フラグを更新するように変更
         socket.on("enemyState", data => {
             enemyState = data;
             hasEnemyConnected = true;
@@ -565,24 +563,37 @@
                 enemyRematchRequested = data.rematchRequested;
             }
 
-            // 勝敗がまだ決まっていない時だけ判定を行う
-            if (!matchResult) {
-                checkMatchResult();
-            }
+            // ★ 常に最新の勝敗判定を行うように修正
+            checkMatchResult();
         });
 
+        // ★ 修正: 自分か相手のどちらかがゲームオーバー、あるいは両方ゲームオーバーの全パターンで正しく WIN/LOSE/DRAW を判定する
         function checkMatchResult() {
             if (!enemyState) return;
 
-            if (enemyState.gameOver && !gameOver) {
-                matchResult = "WIN";
-                gameOver = true;
-            } else if (enemyState.gameOver && gameOver) {
-                if (score > enemyState.score) matchResult = "WIN";
-                else if (score < enemyState.score) matchResult = "LOSE";
+            const enemyScore = enemyState.score || 0;
+
+            if (gameOver && enemyState.gameOver) {
+                // 両方ゲームオーバーの時
+                if (score > enemyScore) matchResult = "WIN";
+                else if (score < enemyScore) matchResult = "LOSE";
                 else matchResult = "DRAW";
-            } else if (!enemyState.gameOver && gameOver) {
-                matchResult = "LOSE";
+            } else if (gameOver && !enemyState.gameOver) {
+                // 自分だけがゲームオーバーの時
+                if (score < enemyScore) {
+                    // すでにスコアが負けていれば即 LOSE 確定
+                    matchResult = "LOSE";
+                } else {
+                    // 自分のスコアがまだ勝っている時は、相手が追い抜くかゲームオーバーになるまで結果を保留 (GAME OVER 表示のまま)
+                    matchResult = null;
+                }
+            } else if (!gameOver && enemyState.gameOver) {
+                // 相手だけがゲームオーバーの時
+                if (score > enemyScore) {
+                    // すでにスコアが勝っていれば即 WIN 確定
+                    matchResult = "WIN";
+                    gameOver = true; // 自分もゲームを終了させる
+                }
             }
         }
 
@@ -702,7 +713,6 @@
         }
 
         function update() {
-            // お互いに再戦を希望したら即座に初期化
             if ((gameOver || matchResult) && myRematchRequested && enemyRematchRequested) {
                 resetOwnGame();
                 sendGameState(true);
@@ -721,6 +731,7 @@
             }
 
             checkGameOver();
+            checkMatchResult(); // ループ内でも常にチェックを走らせる
             sendGameState();
         }
 
@@ -765,7 +776,6 @@
                     ctx.fillText("GAME OVER", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 - 40);
                 }
 
-                // 再戦ボタンを描画
                 rematchButtonRect.x = FIELD_X + FIELD_WIDTH / 2 - rematchButtonRect.w / 2;
                 rematchButtonRect.y = HEIGHT / 2 + 30;
 
