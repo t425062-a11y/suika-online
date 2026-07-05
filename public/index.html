@@ -1184,27 +1184,31 @@
                 return;
             }
 
-            if (enemyState.gameOver && !gameOver) {
+            // 自分だけゲームオーバー
+            if (gameOver && !enemyState.gameOver) {
+                matchResult = "LOSE";
+                return;
+            }
 
-                // 相手が先にトップアウト -> 自分の勝ち（このタイミングで自分の対戦も終了させる）
+            // 相手だけゲームオーバー
+            if (!gameOver && enemyState.gameOver) {
                 matchResult = "WIN";
                 gameOver = true;
+                return;
+            }
 
-            } else if (enemyState.gameOver && gameOver) {
+            // 両者ゲームオーバー
+            if (gameOver && enemyState.gameOver) {
 
-                // 両者ゲームオーバー -> スコアで比較
                 if (score > enemyState.score) {
                     matchResult = "WIN";
-                } else if (score < enemyState.score) {
+                }
+                else if (score < enemyState.score) {
                     matchResult = "LOSE";
-                } else {
+                }
+                else {
                     matchResult = "DRAW";
                 }
-
-            } else if (!enemyState.gameOver && gameOver) {
-
-                // 自分が先にトップアウト -> 自分の負け
-                matchResult = "LOSE";
             }
         }
 
