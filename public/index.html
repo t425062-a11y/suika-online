@@ -183,7 +183,6 @@
         let activeRoomsRawList = [];
         let isInGameMode = false;
 
-        // 画像の読み込み設定
         const seaImages = {};
         const seaImageUrls = {
             1: "images/yadokari.png", 2: "images/kurage.png", 3: "images/fugu.png", 4: "images/rakko.png",
@@ -198,7 +197,6 @@
         const obstacleImage = new Image();
         obstacleImage.src = "images/uni.png";
 
-        // サウンド再生機能
         let audioCtx = null;
         function unlockAudio() {
             if (!audioCtx) {
@@ -224,7 +222,6 @@
             osc.stop(t + 0.15);
         }
 
-        // ロビー制御
         function enterGameRoom(roomName) {
             myRoomId = roomName;
             isInGameMode = true;
@@ -294,7 +291,6 @@
         }
         socket.on("roomList", renderRoomList);
 
-        // 2画面マルチプレイ用の座標・物理パラメータ
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const WIDTH = canvas.width; const HEIGHT = canvas.height;
@@ -308,17 +304,14 @@
         const STATE_SEND_INTERVAL = 100; let matchResult = null; let myRoomId = "default";
         let isEnemyConnectedOnce = false; let lastDropX = -9999; let samePlaceCount = 0;
 
-        // スキル用タイマーと初期化用マックス
         let visionBlurTimer = 0;   let maxVisionBlur = 180;
         let lockInputTimer = 0;    let maxLockInput = 120;
 
-        // 演出エフェクト用変数
         let cutInTimer = 0;
         let cutInLevel = 0;
-        let cutInType = "MY_SKILL"; // "MY_SKILL" または "ENEMY_SKILL"
+        let cutInType = "MY_SKILL"; 
         let shakeTimer = 0; 
 
-        // 【新機能】敵フィールド描画用の独自ウニ落下アニメーション管理配列
         let enemyOjamaVisuals = [];
 
         const radiuses = [0, 22, 30, 40, 52, 66, 82, 100, 122, 148, 178, 212];
@@ -332,7 +325,6 @@
             return false;
         }
 
-        // ペナルティ（オジャマウニ）を落とす関数
         function addPenalty(count) {
             for (let i = 0; i < count; i++) {
                 const level = Math.random() < 0.5 ? 3 : 4;
@@ -342,15 +334,17 @@
                 ball.isObstacle = true;
                 balls.push(ball);
             }
-            shakeTimer = 15; // 被弾したので画面を揺らす
+            shakeTimer = 15; 
         }
 
-        // スキル発動時の相手側への通信送信
+        // スキル発動チェック（レベル制限を厳格化）
         function activateSkill(level) {
             if (level === 6 || level === 8 || level === 10 || level === 11) {
                 cutInTimer = 60;
                 cutInLevel = level;
                 cutInType = "MY_SKILL";
+            } else {
+                return; // スキル対象外のレベルなら何も処理しない（バグ防止）
             }
 
             if (level === 8) { 
@@ -358,7 +352,6 @@
             }
             if (level === 6) { 
                 socket.emit("triggerSkill", { type: "penalty", count: 1, level: 6, relativeX: Math.random() });
-                // 【追加】自分の右側画面（敵のフィールド）に、今からウニが落ちる軌跡を描くための演出オブジェクトを即時生成
                 enemyOjamaVisuals.push({ relX: Math.random(), currentY: -20, targetY: 120, speed: 6, timer: 45 });
             }
             if (level === 10) { 
@@ -372,13 +365,15 @@
             }
         }
 
-        // 相手からスキルが送られてきた時の受信処理
         socket.on("receiveSkill", (skill) => {
             if (!isInGameMode || gameOver || matchResult) return;
             
-            cutInTimer = 60;
-            cutInLevel = skill.level || 6;
-            cutInType = "ENEMY_SKILL";
+            // スキル受信時のみカットインを起動するようにガード
+            if (skill.level === 6 || skill.level === 8 || skill.level === 10 || skill.level === 11) {
+                cutInTimer = 60;
+                cutInLevel = skill.level;
+                cutInType = "ENEMY_SKILL";
+            }
 
             if (skill.type === "blur") {
                 visionBlurTimer = skill.duration;
@@ -460,7 +455,7 @@
             if (lockInputTimer > 0) return;
 
             const radius = radiuses[nextLevel]; let spawnX = currentX;
-            if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_WIDTH - radius;
+            if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_X + FIELD_WIDTH - radius;
             
             if (Math.abs(spawnX - lastDropX) < 30) { samePlaceCount++; } else { samePlaceCount = 0; }
             lastDropX = spawnX;
@@ -495,7 +490,7 @@
                         const newBall = new Ball((a.x + b.x) / 2, (a.y + b.y) / 2, a.level + 1); newBall.vy = -2;
                         balls.splice(j, 1); balls.splice(i, 1); balls.push(newBall);
                         score += getScore(newBall.level);
-                        activateSkill(newBall.level);
+                        activateSkill(newBall.level); // ここで制限チェックが入ります
                         return;
                     }
                 }
@@ -557,24 +552,11 @@
             }
         }
 
-        // 送信用・同期用データ生成
         function serializeState() { return { score, gameOver, nextLevel, visionBlurTimer, lockInputTimer, cutInTimer, cutInLevel, cutInType, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
         function sendGameState() { if (!isInGameMode) return; const now = performance.now(); if (now - lastStateSentAt < STATE_SEND_INTERVAL) return; lastStateSentAt = now; socket.emit("gameState", serializeState()); }
         
-        // 相手側から状態を受信
         socket.on("enemyState", data => { 
             if (!isInGameMode) return; 
-            
-            // 【機能強化】相手側のウニの総数が「前回の同期より増えていた」かつ、まだ自分が落下アニメを積んでいない場合
-            if (enemyState && data.balls) {
-                const prevObstacles = enemyState.balls.filter(b => b.isObstacle).length;
-                const newObstacles = data.balls.filter(b => b.isObstacle).length;
-                // 相手に直接ウニが湧き、こちらの落下予告演出がまだ少なければ補填（相手がオジャマを落とした場合など）
-                if (newObstacles > prevObstacles && enemyOjamaVisuals.length < (newObstacles - prevObstacles)) {
-                    enemyOjamaVisuals.push({ relX: Math.random(), currentY: -10, targetY: 120, speed: 7, timer: 45 });
-                }
-            }
-            
             enemyState = data; 
             requestAnimationFrame(() => checkMatchResult()); 
         });
@@ -595,7 +577,6 @@
             ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.textAlign = "left"; ctx.fillText("ENEMY", ENEMY_OFFSET + 35, 50); ctx.font = "32px sans-serif"; ctx.fillText(enemyState ? (enemyState.score || 0) : 0, ENEMY_OFFSET + 35, 88);
             if (!enemyState) { ctx.fillStyle = "#6b4f3f"; ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.fillText("WAITING", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); return; }
             
-            // 敵の固定オブジェクトを描画
             for (const ball of enemyState.balls || []) {
                 const radius = radiuses[ball.level] || 10; const x = eFieldX + (ball.x - FIELD_X); const y = ball.y;
                 const img = ball.isObstacle ? obstacleImage : seaImages[ball.level];
@@ -611,12 +592,10 @@
                 ctx.restore();
             }
 
-            // 【新機能】敵フィールド用のリアルタイムウニ落下アニメーションと警告ラインの重ね描き
             for (let i = enemyOjamaVisuals.length - 1; i >= 0; i--) {
                 const vis = enemyOjamaVisuals[i];
                 const uniX = eFieldX + (FIELD_WIDTH * vis.relX);
                 
-                // 1. 赤い縦の落下警告ライン
                 ctx.save();
                 ctx.strokeStyle = "rgba(255, 23, 68, 0.35)";
                 ctx.lineWidth = 3;
@@ -624,8 +603,7 @@
                 ctx.beginPath(); ctx.moveTo(uniX, 0); ctx.lineTo(uniX, HEIGHT); ctx.stroke();
                 ctx.restore();
 
-                // 2. 落下するウニ本体
-                const radius = 35; // オジャマウニ専用のわかりやすい中型サイズ
+                const radius = 35; 
                 ctx.save();
                 if (obstacleImage.complete && obstacleImage.naturalWidth > 0) {
                     ctx.beginPath(); ctx.arc(uniX, vis.currentY, radius, 0, Math.PI * 2); ctx.clip();
@@ -636,15 +614,13 @@
                 }
                 ctx.restore();
 
-                // 警告マーク「！」をウニの上空に表示
                 ctx.fillStyle = "#ff1744"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
                 ctx.fillText("⚠️", uniX, Math.max(25, vis.currentY - 45));
 
-                // アニメーション更新
                 vis.currentY += vis.speed;
                 vis.timer--;
                 if (vis.timer <= 0 || vis.currentY > HEIGHT) {
-                    enemyOjamaVisuals.splice(i, 1); // アニメーション終了後に消去
+                    enemyOjamaVisuals.splice(i, 1); 
                 }
             }
 
@@ -655,16 +631,18 @@
             if (enemyState.gameOver) { ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT); ctx.fillStyle = "white"; ctx.font = "50px sans-serif"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); }
         }
 
-        // スキル発動の巨大カットインエフェクト描画
         function drawCutInEffect() {
             let currentTimer = cutInTimer;
             let currentLevel = cutInLevel;
             let currentType = cutInType;
 
+            // 相手が発動したカットインを同期させる時もレベル条件（6,8,10,11）を満たしているかチェックして誤発動を防ぐ
             if (currentTimer <= 0 && enemyState && enemyState.cutInTimer > 0) {
-                currentTimer = enemyState.cutInTimer;
-                currentLevel = enemyState.cutInLevel;
-                currentType = enemyState.cutInType === "MY_SKILL" ? "ENEMY_SKILL" : "MY_SKILL";
+                if (enemyState.cutInLevel === 6 || enemyState.cutInLevel === 8 || enemyState.cutInLevel === 10 || enemyState.cutInLevel === 11) {
+                    currentTimer = enemyState.cutInTimer;
+                    currentLevel = enemyState.cutInLevel;
+                    currentType = enemyState.cutInType === "MY_SKILL" ? "ENEMY_SKILL" : "MY_SKILL";
+                }
             }
 
             if (currentTimer <= 0) return;
@@ -679,7 +657,7 @@
             ctx.stroke();
 
             let skillName = "💥 ATTACK!";
-            if (currentLevel === 6) skillName = "🐬 イルカ・ストライク (ウニ+1)";
+            if (currentLevel === 6) skillName = "🐬 イルカ・ストライスト (ウニ+1)";
             if (currentLevel === 8) skillName = "🐢 カメ・カモフラージュ (視界ブレ)";
             if (currentLevel === 10) skillName = "🦈 シャチ・バインド (操作不能)";
             if (currentLevel === 11) skillName = "🐋 クジラ・タイダルウェーブ (ウニ+4)";
