@@ -1,111 +1,91 @@
-const express = require("express");
+﻿const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 
-// roomId -> Set<socket.id>（現在アクティブなROOMと参加人数を管理する）
-const rooms = new Map();
-
-// 👑 各プレイヤーの最新のゲーム状態（スコアやゲームオーバーフラグ）をサーバー側で記憶する
-const playerStates = new Map();
-
-function getRoomList() {
-    const list = [];
-    for (const [roomId, members] of rooms.entries()) {
-        if (members.size > 0) {
-            list.push({ id: roomId, count: members.size });
-        }
-    }
-    list.sort((a, b) => a.id.localeCompare(b.id));
-    return list;
-}
-
-function broadcastRoomList() {
-    io.emit("roomList", getRoomList());
-}
-
-function leaveCurrentRoom(socket) {
-    if (!socket.roomId) {
-        return;
-    }
-
-    socket.leave(socket.roomId);
-
-    const members = rooms.get(socket.roomId);
-    if (members) {
-        members.delete(socket.id);
-        if (members.size === 0) {
-            rooms.delete(socket.roomId);
-        }
-    }
-
-    // 退室時に記憶していた状態も消去
-    playerStates.delete(socket.id);
-    socket.roomId = null;
-}
+// 部屋ごとの接続状態を管理
+const rooms = {};
 
 io.on("connection", (socket) => {
-    console.log("接続:", socket.id);
+    let currentRoom = null;
 
-    // 接続直後に現在のROOM一覧を送る
-    socket.emit("roomList", getRoomList());
+    // 定期的にロビーへ部屋リストを配る
+    function broadcastRoomList() {
+        const list = Object.keys(rooms).map(roomId => ({
+            id: roomId,
+            count: rooms[roomId].length
+        }));
+        io.emit("roomList", list);
+    }
 
-    socket.on("joinRoom", (room) => {
-        const roomId = typeof room === "string" && room.trim()
-            ? room.trim()
-            : "default";
+    // 最初の一歩として部屋リストを送る
+    broadcastRoomList();
 
-        leaveCurrentRoom(socket);
-
-        socket.join(roomId);
-        socket.roomId = roomId;
-
-        if (!rooms.has(roomId)) {
-            rooms.set(roomId, new Set());
+    // 部屋に入る
+    socket.on("joinRoom", (roomId) => {
+        if (!roomId) roomId = "default";
+        
+        // 以前の部屋があれば抜ける
+        if (currentRoom && rooms[currentRoom]) {
+            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
+            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
+            socket.leave(currentRoom);
         }
 
-        rooms.get(roomId).add(socket.id);
-        
-        // 新規入室時に状態を初期化
-        playerStates.set(socket.id, { score: 0, gameOver: false, balls: [] });
+        currentRoom = roomId;
+        socket.join(roomId);
 
-        console.log(`${socket.id} joined ${roomId}`);
+        if (!rooms[roomId]) rooms[roomId] = [];
+        // 1つの部屋は最大2人まで
+        if (rooms[roomId].length < 2) {
+            rooms[roomId].push(socket.id);
+        }
+
         broadcastRoomList();
     });
 
-    // 🎮 ゲーム状態の受信と転送
-    socket.on("gameState", (data) => {
-        if (socket.roomId) {
-            // サーバー側に最新の状態を保存（相手が通信を止めても、この状態が維持される）
-            playerStates.set(socket.id, data);
-
-            // 通常通り相手にデータを転送
-            socket.to(socket.roomId).emit("enemyState", data);
-        }
+    // ゲーム状態の同期（位置やスコア）
+    socket.on("gameState", (state) => {
+        if (!currentRoom) return;
+        // 自分以外の部屋のメンバーに状態を転送
+        socket.to(currentRoom).emit("enemyState", state);
     });
 
-    socket.on("disconnect", () => {
-        console.log("切断:", socket.id);
+    // 【最重要】スキル発動の仲介（ここが動いていなかった！）
+    socket.on("triggerSkill", (skillData) => {
+        if (!currentRoom) return;
+        // スキルを発動した人「以外」の、同じ部屋の対戦相手にそのままスキルを叩き込む
+        socket.to(currentRoom).emit("receiveSkill", skillData);
+    });
 
-        // 🚨 もし対戦中に突然切断（ブラウザを閉じるなど）したら、残された側を不戦勝（WIN）にするため
-        // 切断したプレイヤーを強制的に「ゲームオーバー」扱いにして最後のデータを相方に送る
-        if (socket.roomId) {
-            const lastState = playerStates.get(socket.id) || { score: 0 };
-            lastState.gameOver = true; // 強制ゲームオーバー
-            socket.to(socket.roomId).emit("enemyState", lastState);
+    // 部屋を自発的に抜ける
+    socket.on("leaveRoom", () => {
+        if (currentRoom && rooms[currentRoom]) {
+            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
+            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
+            socket.leave(currentRoom);
+            currentRoom = null;
         }
+        broadcastRoomList();
+    });
 
-        leaveCurrentRoom(socket);
+    // 切断時
+    socket.on("disconnect", () => {
+        if (currentRoom && rooms[currentRoom]) {
+            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
+            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
+        }
         broadcastRoomList();
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log("Server started: http://localhost:" + PORT);
+    console.log(`Server is running on port ${PORT}`);
 });
