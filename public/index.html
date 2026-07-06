@@ -1,5 +1,4 @@
-$htmlContent = @'
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -17,7 +16,6 @@ $htmlContent = @'
             height: 100vh;
             color: #1a365d;
         }
-
         .lobby-container {
             display: flex;
             flex-direction: column;
@@ -33,7 +31,6 @@ $htmlContent = @'
             z-index: 10;
             box-sizing: border-box;
         }
-
         .game-title {
             font-size: 38px;
             font-weight: bold;
@@ -42,7 +39,6 @@ $htmlContent = @'
             text-shadow: 2px 2px 0px #e0f7fa;
             text-align: center;
         }
-
         .ocean-btn-quick {
             width: 100%;
             background: linear-gradient(135deg, #0288d1 0%, #00b0ff 100%);
@@ -58,46 +54,36 @@ $htmlContent = @'
             animation: waveMotion 3s ease-in-out infinite;
             margin-bottom: 20px;
         }
-
         @keyframes waveMotion {
-            0%, 100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-4px);
-            }
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
         }
-
         .custom-room-box {
             width: 100%;
             display: flex;
             gap: 8px;
             margin-bottom: 20px;
         }
-
-            .custom-room-box input {
-                flex: 1;
-                border: 3px solid #b2ebf2;
-                border-radius: 14px;
-                padding: 12px;
-                font-size: 16px;
-                color: #1a365d;
-                background: white;
-                outline: none;
-            }
-
-            .custom-room-box button {
-                background: #ff8a80;
-                color: white;
-                border: none;
-                border-radius: 14px;
-                padding: 0 20px;
-                font-size: 16px;
-                font-weight: bold;
-                cursor: pointer;
-            }
-
+        .custom-room-box input {
+            flex: 1;
+            border: 3px solid #b2ebf2;
+            border-radius: 14px;
+            padding: 12px;
+            font-size: 16px;
+            color: #1a365d;
+            background: white;
+            outline: none;
+        }
+        .custom-room-box button {
+            background: #ff8a80;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 0 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
         .lobby-subtitle {
             font-size: 16px;
             font-weight: bold;
@@ -105,7 +91,6 @@ $htmlContent = @'
             margin: 10px 0 8px 0;
             color: #006064;
         }
-
         .room-list-scroll {
             width: 100%;
             overflow-y: auto;
@@ -114,7 +99,6 @@ $htmlContent = @'
             flex-direction: column;
             gap: 10px;
         }
-
         .room-card {
             display: flex;
             justify-content: space-between;
@@ -124,17 +108,12 @@ $htmlContent = @'
             border-radius: 14px;
             padding: 12px 16px;
         }
-
-            .room-card.recruiting {
-                border-color: #80cbc4;
-            }
-
-            .room-card.full {
-                border-color: #cfd8dc;
-                background: #f5f7f8;
-                opacity: 0.7;
-            }
-
+        .room-card.recruiting { border-color: #80cbc4; }
+        .room-card.full {
+            border-color: #cfd8dc;
+            background: #f5f7f8;
+            opacity: 0.7;
+        }
         .room-card-btn {
             border: none;
             border-radius: 10px;
@@ -142,25 +121,14 @@ $htmlContent = @'
             font-weight: bold;
             cursor: pointer;
         }
-
-        .room-card.recruiting .room-card-btn {
-            background: #26a69a;
-            color: white;
-        }
-
-        .room-card.full .room-card-btn {
-            background: #b0bec5;
-            color: white;
-            cursor: not-allowed;
-        }
-
+        .room-card.recruiting .room-card-btn { background: #26a69a; color: white; }
+        .room-card.full .room-card-btn { background: #b0bec5; color: white; cursor: not-allowed; }
         #game-screen {
             display: none;
             flex-direction: column;
             align-items: center;
             gap: 16px;
         }
-
         canvas {
             width: min(95vw, 1440px);
             height: auto;
@@ -169,7 +137,6 @@ $htmlContent = @'
             border-radius: 18px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
-
         .back-to-lobby-btn {
             background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
             color: white;
@@ -182,10 +149,7 @@ $htmlContent = @'
             box-shadow: 0 6px 16px rgba(38, 166, 154, 0.4);
             transition: transform 0.2s, box-shadow 0.2s;
         }
-
-            .back-to-lobby-btn:hover {
-                transform: scale(1.05);
-            }
+        .back-to-lobby-btn:hover { transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -287,7 +251,7 @@ $htmlContent = @'
                 card.className = "room-card " + (isFull ? "full" : "recruiting");
                 const infoBox = document.createElement("div");
                 const nameStr = document.createElement("span");
-                nameStr.textContent = `🐚 部屋: ${room.id} `;
+                nameStr.textContent = `🐚 部屋: ${room.id}`;
                 const statusStr = document.createElement("span");
                 statusStr.textContent = isFull ? "満員" : "募集中";
                 infoBox.appendChild(nameStr);
@@ -460,7 +424,14 @@ $htmlContent = @'
             for (const ball of enemyState.balls || []) {
                 const radius = radiuses[ball.level] || 10; const x = eFieldX + (ball.x - FIELD_X); const y = ball.y;
                 ctx.save();
-                if (ball.isObstacle) { ctx.beginPath(); ctx.fillStyle = "#444444"; ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
+                if (ball.isObstacle) {
+                    if (obstacleImage.complete) {
+                        ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
+                        ctx.drawImage(obstacleImage, x - radius, y - radius, radius * 2, radius * 2);
+                    } else {
+                        ctx.beginPath(); ctx.fillStyle = "#444444"; ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
                 else {
                     const img = ballImages[ball.level]; if (img && img.complete) { ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2); }
                     else { ctx.beginPath(); ctx.fillStyle = colors[ball.level] || "#ddd"; ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
@@ -511,5 +482,3 @@ $htmlContent = @'
     </script>
 </body>
 </html>
-'@
-Set-Content -Path "public\index.html" -Value $htmlContent -Encoding UTF8
