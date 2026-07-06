@@ -677,33 +677,27 @@
             socket.emit("gameState", serializeState());
         }
 
-        // 👑 相手からの状態を受信した瞬間、最優先で判定を走らせる（フリーズ防止）
         socket.on("enemyState", data => {
             if (!isInGameMode) return;
             enemyState = data;
 
-            // 相手がゲームオーバーになった、あるいはスコアで抜いた瞬間、
-            // あなたの「update loop」を待たずに、即座にWIN判定を決定する！
             requestAnimationFrame(() => {
                 checkMatchResult();
             });
         });
 
         function checkMatchResult() {
-            // すでに結果が決まっているならスキップ
             if (matchResult) return;
             if (!enemyState) return;
 
-            // マトリクス判定
-            // 👑 あなたはまだプレイ中(gameOver=false) で、相手がゲームオーバーになった！
+            // 👑 あなたが生きていて、相手がゲームオーバーになった時
             if (!gameOver && enemyState.gameOver) {
-                // その瞬間にWIN確定！
                 matchResult = "WIN";
-                gameOver = true; // 自分もループを停止させる
+                // 🚨 ここで gameOver = true にしなように修正！
                 return;
             }
 
-            // あなたも相手もゲームオーバーになった時（両方積んだ）
+            // お互いがゲームオーバーになった時
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -714,8 +708,6 @@
                 }
                 return;
             }
-
-            // あなたはゲームオーバーで、相手がまだプレイ中の間はmatchResultはnullのまま（待機）
         }
 
         function drawEnemyField() {
@@ -795,12 +787,29 @@
             ctx.globalAlpha = 1;
         }
 
+        function drawDebugInfo() {
+            ctx.fillStyle = "#000000";
+            ctx.font = "14px monospace";
+            ctx.textAlign = "left";
+
+            let myStatus = gameOver ? "DEAD" : "ALIVE";
+            let enemyStatus = "NOT CONNECTED";
+            let enemyScoreText = "N/A";
+
+            if (enemyState) {
+                enemyStatus = enemyState.gameOver ? "DEAD" : "ALIVE";
+                enemyScoreText = enemyState.score;
+            }
+
+            ctx.fillText(`[DEBUG] ME:${myStatus}(S:${score}) | ENEMY:${enemyStatus}(S:${enemyScoreText}) | RESULT:${matchResult || "NONE"}`, 20, HEIGHT - 20);
+        }
+
         function update() {
             if (!isInGameMode) return;
             if (!isMatched()) return;
 
-            // あなたがまだゲームオーバーになっていない時だけ物理演算をする
-            if (!gameOver) {
+            // 👑 「自分自身がまだ詰んでいない」かつ「勝敗がまだ決まっていない」間だけ物理演算を動かす
+            if (!gameOver && !matchResult) {
                 for (const ball of balls) {
                     ball.update();
                 }
@@ -810,12 +819,8 @@
                 }
 
                 checkGameOver();
-
-                // 物理演算の後に、通常通り勝敗判定をチェック（追い上げ勝利など）
                 checkMatchResult();
             }
-
-            // 勝敗が決まったら、自分もgameOver=trueにする処理はcheckMatchResult内で完結
 
             sendGameState();
         }
@@ -831,7 +836,6 @@
             drawNext();
             drawEnemyField();
 
-            // 結果が出ていない、かつ生きてる時だけプレビューを表示
             if (isMatched() && !gameOver && !matchResult) {
                 drawDropPreview();
             }
@@ -840,6 +844,7 @@
                 ball.draw();
             }
 
+            // 👑 描画優先順位の整理
             if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -850,6 +855,7 @@
                 ctx.font = "bold 60px sans-serif";
                 ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
             }
+            // 👑 勝敗が決まっていない純粋な自分のゲームオーバー（相手待ち状態）の時だけ帯を出す
             else if (gameOver) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)";
                 ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -875,6 +881,8 @@
                 ctx.font = "18px sans-serif";
                 ctx.fillText("対戦相手が参加するとスタートします", FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2 + 20);
             }
+
+            drawDebugInfo();
         }
 
         function loop() {
