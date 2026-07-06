@@ -7,7 +7,7 @@
     <style>
         body {
             margin: 0;
-            background: linear-gradient(180deg, #e0f7fa 0%, #b2dfdb 100%);
+            background: linear-gradient(180deg, #fff6d6 0%, #ffd9ec 100%);
             overflow: hidden;
             font-family: 'Helvetica Neue', Arial, sans-serif;
             display: flex;
@@ -168,6 +168,7 @@
         <canvas id="gameCanvas" width="1440" height="820"></canvas>
         <button id="backToLobbyBtn" class="back-to-lobby-btn" type="button" style="display: none;">ロビーに戻る</button>
     </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
@@ -182,22 +183,48 @@
         let activeRoomsRawList = [];
         let isInGameMode = false;
 
-        const ballImages = {};
-        const obstacleImage = new Image();
-        obstacleImage.src = '/images/uni.png';
-
-        const imageFiles = {
-            1: 'fugu.png', 2: 'kurage.png', 3: 'yadokari.png', 4: 'kame.png',
-            5: 'rakko.png', 6: 'azarasi.png', 7: 'pen.png', 8: 'iruka.png',
-            9: 'same.png', 10: 'shati.png', 11: 'kuzira.png'
+        // 画像の読み込み設定
+        const seaImages = {};
+        const seaImageUrls = {
+            1: "images/yadokari.png", 2: "images/kurage.png", 3: "images/fugu.png", 4: "images/rakko.png",
+            5: "images/pen.png", 6: "images/iruka.png", 7: "images/azarasi.png", 8: "images/kame.png",
+            9: "images/same.png", 10: "images/shati.png", 11: "images/kuzira.png"
         };
-
-        for (const lvl in imageFiles) {
+        for (let level = 1; level <= 11; level++) {
             const img = new Image();
-            img.src = `/images/${imageFiles[lvl]}`;
-            ballImages[lvl] = img;
+            img.src = seaImageUrls[level];
+            seaImages[level] = img;
+        }
+        const obstacleImage = new Image();
+        obstacleImage.src = "images/uni.png"; // 敵側ウニのパスに合わせます
+
+        // サウンド再生機能
+        let audioCtx = null;
+        function unlockAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+        }
+        function playMergeSound(level) {
+            unlockAudio();
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(220 + level * 45, t);
+            osc.frequency.exponentialRampToValueAtTime(120 + level * 20, t + 0.12);
+            gain.gain.setValueAtTime(0.12, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.15);
         }
 
+        // ロビー制御
         function enterGameRoom(roomName) {
             myRoomId = roomName;
             isInGameMode = true;
@@ -267,17 +294,23 @@
         }
         socket.on("roomList", renderRoomList);
 
+        // 2画面マルチプレイ用の座標・物理パラメータ
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const WIDTH = canvas.width; const HEIGHT = canvas.height;
         const PANEL_WIDTH = WIDTH / 2; const ENEMY_OFFSET = PANEL_WIDTH;
-        const FIELD_WIDTH = Math.min(500, PANEL_WIDTH - 40);
-        const FIELD_X = (PANEL_WIDTH - FIELD_WIDTH) / 2;
+        const FIELD_WIDTH = 500;
+        const FIELD_X = 190; // あなたのレイアウト位置
+
         const gravity = 0.75; const lineY = 120;
 
         let gameOver = false; let score = 0; let enemyState = null; let lastStateSentAt = 0;
         const STATE_SEND_INTERVAL = 100; let matchResult = null; let myRoomId = "default";
         let isEnemyConnectedOnce = false; let lastDropX = -9999; let samePlaceCount = 0;
+
+        // スキル用タイマー
+        let visionBlurTimer = 0;
+        let lockInputTimer = 0;
 
         const radiuses = [0, 22, 30, 40, 52, 66, 82, 100, 122, 148, 178, 212];
         const colors = ["#ddd", "#ff9aa2", "#ffd97d", "#f9f871", "#8fd3ff", "#98f5a5", "#caa6ff", "#ff9de1", "#6fdd8b", "#ffb86b", "#7dd3fc", "#f472b6"];
@@ -289,6 +322,48 @@
             if (currentRoomData && currentRoomData.count >= 2) { isEnemyConnectedOnce = true; return true; }
             return false;
         }
+
+        // ペナルティ（オジャマウニ）を落とす関数
+        function addPenalty(count) {
+            for (let i = 0; i < count; i++) {
+                const level = Math.random() < 0.5 ? 3 : 4;
+                const radius = radiuses[level];
+                const x = FIELD_X + radius + Math.random() * (FIELD_WIDTH - radius * 2);
+                const ball = new Ball(x, 50, level);
+                ball.isObstacle = true;
+                balls.push(ball);
+            }
+        }
+
+        // スキル発動時の相手側への通信送信
+        function activateSkill(level) {
+            if (level === 8) { // カメ: 視界ブレ
+                socket.emit("triggerSkill", { type: "blur", duration: 180 });
+            }
+            if (level === 6) { // イルカ: ウニ1個送る
+                socket.emit("triggerSkill", { type: "penalty", count: 1 });
+            }
+            if (level === 10) { // シャチ: 操作ロック
+                socket.emit("triggerSkill", { type: "lock", duration: 120 });
+            }
+            if (level === 11) { // クジラ: ウニ4個送る
+                socket.emit("triggerSkill", { type: "penalty", count: 4 });
+            }
+        }
+
+        // 相手からスキルが送られてきた時の受信処理
+        socket.on("receiveSkill", (skill) => {
+            if (!isInGameMode || gameOver || matchResult) return;
+            if (skill.type === "blur") {
+                visionBlurTimer = skill.duration;
+            }
+            if (skill.type === "lock") {
+                lockInputTimer = skill.duration;
+            }
+            if (skill.type === "penalty") {
+                addPenalty(skill.count);
+            }
+        });
 
         class Ball {
             constructor(x, y, level) {
@@ -302,55 +377,67 @@
                 this.x += this.vx; this.y += this.vy;
                 const friction = 0.92 + this.level * 0.008; this.vx *= friction;
                 if (Math.abs(this.vx) < 0.05 && Math.abs(this.vy) < 0.05) { this.vx = 0; this.vy = 0; }
-                if (this.y + this.radius > HEIGHT) { this.y = HEIGHT - this.radius; this.vy *= -0.05; this.vx *= 0.85; }
+                if (this.y + this.radius > HEIGHT) {
+                    this.y = HEIGHT - this.radius; this.vy *= -0.05; this.vx *= 0.85;
+                    if (Math.abs(this.vy) < 0.1) this.vy = 0;
+                }
                 if (this.x - this.radius < FIELD_X) { this.x = FIELD_X + this.radius; this.vx *= 0.2; }
                 if (this.x + this.radius > FIELD_X + FIELD_WIDTH) { this.x = FIELD_X + FIELD_WIDTH - this.radius; this.vx *= 0.2; }
-                if (this.y > lineY + this.radius) { this.isNew = false; }
+                if (this.y - this.radius > lineY) { this.isNew = false; }
             }
             draw() {
+                const img = this.isObstacle ? obstacleImage : seaImages[this.level];
+                const useImage = img && img.complete && img.naturalWidth > 0;
                 ctx.save();
-                if (this.isObstacle) {
-                    if (obstacleImage.complete) {
-                        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.clip();
-                        ctx.drawImage(obstacleImage, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
-                    } else {
-                        ctx.beginPath(); ctx.fillStyle = "#444444"; ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
-                    }
+                if (useImage) {
+                    ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2); ctx.clip();
+                    ctx.drawImage(img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                    ctx.restore();
+                    ctx.beginPath(); ctx.fillStyle = "rgba(255,255,255,0.25)";
+                    ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = "rgba(0,0,0,0.15)"; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2); ctx.stroke();
                 } else {
-                    const img = ballImages[this.level];
-                    if (img && img.complete) {
-                        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.clip();
-                        ctx.drawImage(img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
-                    } else {
-                        ctx.beginPath(); ctx.fillStyle = colors[this.level]; ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
-                    }
+                    ctx.beginPath(); ctx.fillStyle = this.isObstacle ? "#444444" : colors[this.level];
+                    ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.fillStyle = "rgba(255,255,255,0.35)";
+                    ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
                 }
-                ctx.restore();
+                if (this.isObstacle && !useImage) {
+                    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${this.radius * 0.7}px sans-serif`;
+                    ctx.fillStyle = "white"; ctx.fillText("X", this.x, this.y);
+                }
             }
         }
 
         let balls = []; let currentX = FIELD_X + FIELD_WIDTH / 2; let nextLevel = randomLevel();
         function resetOwnGame() {
             balls = []; score = 0; gameOver = false; matchResult = null; nextLevel = randomLevel();
-            currentX = FIELD_X + FIELD_WIDTH / 2; lastDropX = -9999; samePlaceCount = 0; enemyState = null; isEnemyConnectedOnce = false; backToLobbyBtn.style.display = "none";
+            currentX = FIELD_X + FIELD_WIDTH / 2; lastDropX = -9999; samePlaceCount = 0; enemyState = null; isEnemyConnectedOnce = false;
+            visionBlurTimer = 0; lockInputTimer = 0; backToLobbyBtn.style.display = "none";
         }
         function randomLevel() { const r = Math.random(); if (r < 0.40) return 1; if (r < 0.75) return 2; if (r < 0.95) return 3; return 4; }
+        
         function setCurrentXFromClientX(clientX) {
             const rect = canvas.getBoundingClientRect(); const scaleX = WIDTH / rect.width; let x = (clientX - rect.left) * scaleX;
             if (x < FIELD_X) x = FIELD_X; if (x > FIELD_X + FIELD_WIDTH) x = FIELD_X + FIELD_WIDTH; currentX = x;
         }
         canvas.addEventListener("mousemove", e => { if (isInGameMode) setCurrentXFromClientX(e.clientX); });
-        canvas.addEventListener("touchmove", e => { if (isInGameMode) { e.preventDefault(); setCurrentXFromClientX(e.touches[0].clientX); } }, { passive: false });
-        canvas.addEventListener("touchstart", e => { if (isInGameMode) { e.preventDefault(); setCurrentXFromClientX(e.touches[0].clientX); dropCurrentBall(); } }, { passive: false });
         canvas.addEventListener("click", () => { if (isInGameMode) dropCurrentBall(); });
 
         function dropCurrentBall() {
+            unlockAudio();
             if (gameOver || matchResult || !isMatched()) return;
+            if (lockInputTimer > 0) return; // 操作ロック中
+
             const radius = radiuses[nextLevel]; let spawnX = currentX;
             if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_X + FIELD_WIDTH - radius;
-            if (Math.abs(spawnX - lastDropX) < 25) { samePlaceCount++; } else { samePlaceCount = 0; }
+            
+            if (Math.abs(spawnX - lastDropX) < 30) { samePlaceCount++; } else { samePlaceCount = 0; }
             lastDropX = spawnX;
-            if (samePlaceCount >= 5) {
+
+            if (samePlaceCount >= 3) { // 3回連続同じ場所なら自爆オジャマウニ
                 const obstacleLevel = randomLevel(); const obstacleRadius = radiuses[obstacleLevel];
                 const randomX = FIELD_X + obstacleRadius + Math.random() * (FIELD_WIDTH - obstacleRadius * 2);
                 const ojama = new Ball(randomX, 50, obstacleLevel); ojama.isObstacle = true; balls.push(ojama); samePlaceCount = 0;
@@ -360,7 +447,7 @@
             nextLevel = randomLevel();
         }
 
-        function collide(a, b) { const dx = b.x - a.x; const dy = b.y - a.y; const limit = (a.radius + b.radius) * 0.98; return (dx * dx + dy * dy < limit * limit); }
+        function collide(a, b) { const dx = b.x - a.x; const dy = b.y - a.y; const dist = Math.sqrt(dx * dx + dy * dy); return dist < (a.radius + b.radius) * 1.08; }
         function getScore(level) { const scores = { 1: 10, 2: 30, 3: 60, 4: 100, 5: 200, 6: 400, 7: 800, 8: 2000, 9: 5000, 10: 12000, 11: 30000 }; return scores[level] || 0; }
 
         function mergeBalls() {
@@ -376,33 +463,61 @@
                     if (a.isObstacle || b.isObstacle) continue;
                     if (a.level === b.level) {
                         if (a.level === 11) { score += 10000; balls = []; return; }
+                        playMergeSound(a.level + 1); // 効果音の再生
                         const newBall = new Ball((a.x + b.x) / 2, (a.y + b.y) / 2, a.level + 1); newBall.vy = -2;
-                        balls.splice(j, 1); balls.splice(i, 1); balls.push(newBall); score += getScore(newBall.level); return;
+                        balls.splice(j, 1); balls.splice(i, 1); balls.push(newBall);
+                        score += getScore(newBall.level);
+                        activateSkill(newBall.level); // スキル発動（相手に送る）
+                        return;
                     }
                 }
             }
         }
 
         function checkGameOver() {
-            if (gameOver) return;
             for (const ball of balls) {
                 if (ball.isNew) continue;
-                if (ball.y > lineY && (ball.y - ball.radius) < lineY && Math.abs(ball.vy) < 0.5) { gameOver = true; }
+                if (ball.y - ball.radius < lineY) { gameOver = true; }
             }
         }
 
-        function drawBackgroundDecor() { ctx.fillStyle = "rgba(255,255,255,0.25)"; for (let i = 0; i < 8; i++) { ctx.beginPath(); ctx.arc(60 + i * 90, 80 + (i % 2) * 40, 30, 0, Math.PI * 2); ctx.fill(); } }
+        function drawBackgroundDecor() { ctx.fillStyle = "rgba(255,255,255,0.25)"; for (let i = 0; i < 16; i++) { ctx.beginPath(); ctx.arc(60 + (i%8) * 90 + (i>=8?ENEMY_OFFSET:0), 80 + (i % 2) * 40, 30, 0, Math.PI * 2); ctx.fill(); } }
         function drawField() { ctx.fillStyle = "#fffdf4"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT); }
         function drawLine() { ctx.strokeStyle = "#ff7b7b"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(FIELD_X, lineY); ctx.lineTo(FIELD_X + FIELD_WIDTH, lineY); ctx.stroke(); }
-        function drawScore() { ctx.fillStyle = "#fff8ee"; ctx.fillRect(20, 20, 140, 90); ctx.strokeStyle = "#d8b98f"; ctx.lineWidth = 4; ctx.strokeRect(20, 20, 140, 90); ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.fillText("SCORE", 35, 50); ctx.font = "32px sans-serif"; ctx.fillText(score, 35, 88); }
+        function drawScore() { ctx.fillStyle = "#fff8ee"; ctx.fillRect(20, 20, 140, 90); ctx.strokeStyle = "#d8b98f"; ctx.lineWidth = 4; ctx.strokeRect(20, 20, 140, 90); ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.textAlign = "left"; ctx.fillText("SCORE", 35, 50); ctx.font = "32px sans-serif"; ctx.fillText(score, 35, 88); }
         function drawNext() {
             ctx.fillStyle = "#fff8ee"; ctx.fillRect(20, 140, 140, 170); ctx.strokeStyle = "#d8b98f"; ctx.lineWidth = 4; ctx.strokeRect(20, 140, 140, 170);
             ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.textAlign = "center"; ctx.fillText("NEXT", 90, 180);
-            const r = radiuses[nextLevel] * 0.6; const img = ballImages[nextLevel];
-            ctx.save(); if (img && img.complete) { ctx.beginPath(); ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, 90 - r, 245 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.fill(); } ctx.restore();
+            const r = radiuses[nextLevel] * 0.6; const img = seaImages[nextLevel];
+            const useImage = img && img.complete && img.naturalWidth > 0;
+            ctx.save(); if (useImage) { ctx.beginPath(); ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, 90 - r, 245 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.fill(); } ctx.restore();
+            if (useImage) { ctx.beginPath(); ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 2; ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.stroke(); }
         }
 
-        function serializeState() { return { score, gameOver, nextLevel, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
+        function drawDropPreview() {
+            if (lockInputTimer > 0) return;
+            const r = radiuses[nextLevel]; const img = seaImages[nextLevel];
+            const useImage = img && img.complete && img.naturalWidth > 0;
+            ctx.save(); ctx.globalAlpha = 0.3;
+            if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
+            ctx.restore();
+            
+            // 視界ブレ（ブレというより目くらましエフェクト）の描画
+            if (visionBlurTimer > 0) {
+                ctx.fillStyle = "rgba(255,255,255,0.65)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
+                ctx.fillStyle = "rgba(120,120,120,0.35)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawTimers() {
+            ctx.fillStyle = "#6b4f3f"; ctx.font = "20px sans-serif"; ctx.textAlign = "left";
+            if (visionBlurTimer > 0) ctx.fillText("🔮 VISION BLUR", 20, 340);
+            if (lockInputTimer > 0) ctx.fillText("🔒 INPUT LOCK", 20, 370);
+        }
+
+        // 送信用・同期用データ生成
+        function serializeState() { return { score, gameOver, nextLevel, visionBlurTimer, lockInputTimer, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
         function sendGameState() { if (!isInGameMode) return; const now = performance.now(); if (now - lastStateSentAt < STATE_SEND_INTERVAL) return; lastStateSentAt = now; socket.emit("gameState", serializeState()); }
         socket.on("enemyState", data => { if (!isInGameMode) return; enemyState = data; requestAnimationFrame(() => checkMatchResult()); });
 
@@ -421,33 +536,35 @@
             ctx.fillStyle = "#fff8ee"; ctx.fillRect(ENEMY_OFFSET + 20, 20, 140, 90); ctx.strokeStyle = "#d8b98f"; ctx.lineWidth = 4; ctx.strokeRect(ENEMY_OFFSET + 20, 20, 140, 90);
             ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.textAlign = "left"; ctx.fillText("ENEMY", ENEMY_OFFSET + 35, 50); ctx.font = "32px sans-serif"; ctx.fillText(enemyState ? (enemyState.score || 0) : 0, ENEMY_OFFSET + 35, 88);
             if (!enemyState) { ctx.fillStyle = "#6b4f3f"; ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.fillText("WAITING", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); return; }
+            
             for (const ball of enemyState.balls || []) {
                 const radius = radiuses[ball.level] || 10; const x = eFieldX + (ball.x - FIELD_X); const y = ball.y;
+                const img = ball.isObstacle ? obstacleImage : seaImages[ball.level];
+                const useImage = img && img.complete && img.naturalWidth > 0;
                 ctx.save();
-                if (ball.isObstacle) {
-                    if (obstacleImage.complete) {
-                        ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
-                        ctx.drawImage(obstacleImage, x - radius, y - radius, radius * 2, radius * 2);
-                    } else {
-                        ctx.beginPath(); ctx.fillStyle = "#444444"; ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-                    }
-                }
-                else {
-                    const img = ballImages[ball.level]; if (img && img.complete) { ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2); }
-                    else { ctx.beginPath(); ctx.fillStyle = colors[ball.level] || "#ddd"; ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
+                if (useImage) {
+                    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
+                    ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2);
+                } else {
+                    ctx.beginPath(); ctx.fillStyle = ball.isObstacle ? "#444444" : colors[ball.level] || "#ddd";
+                    ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
                 }
                 ctx.restore();
             }
+
+            // 敵側のスキルエフェクト状態も描画
+            if (enemyState.visionBlurTimer > 0) {
+                ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT);
+            }
+
             if (enemyState.gameOver) { ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT); ctx.fillStyle = "white"; ctx.font = "50px sans-serif"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); }
         }
 
-        function drawDropPreview() {
-            const r = radiuses[nextLevel]; const img = ballImages[nextLevel];
-            ctx.save(); ctx.globalAlpha = 0.4; if (img && img.complete) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); } ctx.restore();
-        }
         function drawDebugInfo() { ctx.fillStyle = "#000000"; ctx.font = "14px monospace"; ctx.textAlign = "left"; let myStatus = gameOver ? "DEAD" : "ALIVE"; let enemyStatus = enemyState ? (enemyState.gameOver ? "DEAD" : "ALIVE") : "NOT CONNECTED"; ctx.fillText(`[DEBUG] ME:${myStatus}(S:${score}) | ENEMY:${enemyStatus} | RESULT:${matchResult || "NONE"}`, 20, HEIGHT - 20); }
 
         function update() {
+            if (visionBlurTimer > 0) visionBlurTimer--;
+            if (lockInputTimer > 0) lockInputTimer--;
             if (!isInGameMode || !isMatched()) return;
             if (!gameOver && !matchResult) {
                 for (const ball of balls) ball.update();
@@ -461,6 +578,7 @@
             if (!isInGameMode) return; ctx.clearRect(0, 0, WIDTH, HEIGHT);
             drawBackgroundDecor(); drawField(); drawLine(); drawScore(); drawNext(); drawEnemyField();
             if (isMatched() && !gameOver && !matchResult) drawDropPreview();
+            drawTimers();
             for (const ball of balls) ball.draw();
             if (matchResult) {
                 ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT); ctx.textAlign = "center";
