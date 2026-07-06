@@ -1,3 +1,10 @@
+ご希望の進化順「**クラゲ ➔ ヤドカリ ➔ ウミガメ**」の並びを完全に反映し、シャチとサメの順番入れ替え、そしてクジラが最終形態（レベル11）になるようにすべて修正した、完全版の **`index.html`** のコードです。
+
+このコードをそのままコピー＆ペーストしてご利用いただけます。
+
+### 📄 `index.html`（完全版）
+
+```html
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -221,6 +228,33 @@
         let activeRoomsRawList = [];
         let isInGameMode = false;
 
+        // 🎨 画像アセットのプリロード
+        const ballImages = {};
+        const obstacleImage = new Image();
+        obstacleImage.src = '/images/uni.png'; // ⚠️ お邪魔ブロックはウニ
+
+        // 🌊 ご希望に基づいた正しい進化順の画像マッピング
+        const imageFiles = {
+            1: 'fugu.png',      // フグ
+            2: 'kurage.png',    // クラゲ
+            3: 'yadokari.png',  // ヤドカリ
+            4: 'kame.png',      // ウミガメ（ヤドカリの次！）
+            5: 'rakko.png',     // ラッコ
+            6: 'azarasi.png',   // アザラシ
+            7: 'pen.png',       // ペンギン
+            8: 'iruka.png',     // イルカ
+            9: 'same.png',      // サメ
+            10: 'shati.png',    // シャチ（サメより大きく変更！）
+            11: 'kuzira.png'    // クジラ（最終形態！）
+        };
+
+        // 画像の読み込み開始
+        for (const lvl in imageFiles) {
+            const img = new Image();
+            img.src = `/images/${imageFiles[lvl]}`;
+            ballImages[lvl] = img;
+        }
+
         function enterGameRoom(roomName) {
             myRoomId = roomName;
             isInGameMode = true;
@@ -421,27 +455,34 @@
             }
 
             draw() {
-                ctx.beginPath();
-                ctx.fillStyle = this.isObstacle ? "#444444" : colors[this.level];
-                ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.fillStyle = "rgba(255,255,255,0.35)";
-                ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.font = `${this.radius * 0.7}px sans-serif`;
-
+                ctx.save();
                 if (this.isObstacle) {
-                    ctx.fillStyle = "white";
-                    ctx.fillText("X", this.x, this.y);
+                    if (obstacleImage.complete) {
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                        ctx.clip();
+                        ctx.drawImage(obstacleImage, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                    } else {
+                        ctx.beginPath();
+                        ctx.fillStyle = "#444444";
+                        ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.95, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 } else {
-                    ctx.fillStyle = "#5c4033";
-                    ctx.fillText(this.level, this.x, this.y);
+                    const img = ballImages[this.level];
+                    if (img && img.complete) {
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                        ctx.clip();
+                        ctx.drawImage(img, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+                    } else {
+                        ctx.beginPath();
+                        ctx.fillStyle = colors[this.level];
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
+                ctx.restore();
             }
         }
 
@@ -677,14 +718,21 @@
             ctx.fillText("NEXT", 90, 180);
 
             const r = radiuses[nextLevel] * 0.6;
-            ctx.beginPath();
-            ctx.fillStyle = colors[nextLevel];
-            ctx.arc(90, 245, r, 0, Math.PI * 2);
-            ctx.fill();
+            const img = ballImages[nextLevel];
 
-            ctx.fillStyle = "#5c4033";
-            ctx.font = "26px sans-serif";
-            ctx.fillText(nextLevel, 90, 245);
+            ctx.save();
+            if (img && img.complete) {
+                ctx.beginPath();
+                ctx.arc(90, 245, r, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(img, 90 - r, 245 - r, r * 2, r * 2);
+            } else {
+                ctx.beginPath();
+                ctx.fillStyle = colors[nextLevel];
+                ctx.arc(90, 245, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
         }
 
         function serializeState() {
@@ -718,24 +766,20 @@
             });
         });
 
-        // 🛠️ 修正箇所：勝敗条件の漏れをカバー
         function checkMatchResult() {
             if (matchResult) return;
             if (!enemyState) return;
 
-            // 1. あなたが生きていて、相手がゲームオーバーになった時
             if (!gameOver && enemyState.gameOver) {
                 matchResult = "WIN";
                 return;
             }
 
-            // 2. あなたが先にゲームオーバーになり、相手がまだ生きている時（★ここを追加）
             if (gameOver && !enemyState.gameOver) {
                 matchResult = "LOSE";
                 return;
             }
 
-            // 3. お互いがゲームオーバーになった時
             if (gameOver && enemyState.gameOver) {
                 if (score > enemyState.score) {
                     matchResult = "WIN";
@@ -787,22 +831,27 @@
                 const x = eFieldX + (ball.x - FIELD_X);
                 const y = ball.y;
 
-                ctx.beginPath();
-                ctx.fillStyle = ball.isObstacle ? "#444444" : colors[ball.level] || "#ddd";
-                ctx.ellipse(x, y, radius, radius * 0.95, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.font = `${radius * 0.7}px sans-serif`;
-
+                ctx.save();
                 if (ball.isObstacle) {
-                    ctx.fillStyle = "white";
-                    ctx.fillText("X", x, y);
+                    ctx.beginPath();
+                    ctx.fillStyle = "#444444";
+                    ctx.ellipse(x, y, radius, radius * 0.95, 0, 0, Math.PI * 2);
+                    ctx.fill();
                 } else {
-                    ctx.fillStyle = "#5c4033";
-                    ctx.fillText(ball.level, x, y);
+                    const img = ballImages[ball.level];
+                    if (img && img.complete) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, Math.PI * 2);
+                        ctx.clip();
+                        ctx.drawImage(img, x - radius, y - radius, radius * 2, radius * 2);
+                    } else {
+                        ctx.beginPath();
+                        ctx.fillStyle = colors[ball.level] || "#ddd";
+                        ctx.arc(x, y, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
+                ctx.restore();
             }
 
             if (enemyState.gameOver) {
@@ -817,12 +866,22 @@
 
         function drawDropPreview() {
             const r = radiuses[nextLevel];
-            ctx.globalAlpha = 0.3;
-            ctx.beginPath();
-            ctx.fillStyle = colors[nextLevel];
-            ctx.arc(currentX, 50, r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
+            const img = ballImages[nextLevel];
+
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            if (img && img.complete) {
+                ctx.beginPath();
+                ctx.arc(currentX, 50, r, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2);
+            } else {
+                ctx.beginPath();
+                ctx.fillStyle = colors[nextLevel];
+                ctx.arc(currentX, 50, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
         }
 
         function drawDebugInfo() {
@@ -932,3 +991,5 @@
     </script>
 </body>
 </html>
+
+```
