@@ -264,7 +264,7 @@
         const FIELD_WIDTH = 500; const FIELD_X = 190;
         const gravity = 0.75; const lineY = 120;
 
-        let gameOver = false; let score = 0; let enemyState = null; let lastStateSentAt = 0;
+        let gameOver = false; let score = 0; let enemyState = null; let lastStateSentAt = 0; let gameOverGraceTimer = 0;
         const STATE_SEND_INTERVAL = 100; let matchResult = null; let myRoomId = "default";
         let isEnemyConnectedOnce = false; let lastDropX = -9999; let samePlaceCount = 0;
 
@@ -432,7 +432,36 @@
             }
         }
 
-        function checkGameOver() { for (const ball of balls) { if (ball.isNew) continue; if (ball.y - ball.radius < lineY) { gameOver = true; } } }
+        function checkGameOver() {
+            // 試合がすでに決している場合は何もしない
+            if (gameOver || matchResult) return;
+
+            let isViolating = false;
+            for (const ball of balls) {
+                // 落としたて（上空にいる間）や、生まれて間もないものは判定から完全に除外
+                if (ball.isNew || ball.spawnTimer > 0 || ball.y < lineY) continue;
+                
+                // ボールの「てっぺん」が赤い線より上にあるか
+                if (ball.y - ball.radius < lineY) {
+                    // さらに、下方向への勢いが止まっている（積み上がっている）かチェック
+                    if (Math.abs(ball.vy) < 0.5) {
+                        isViolating = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isViolating) {
+                gameOverGraceTimer++;
+                // 赤い線の上に1.5秒（約90フレーム）以上留まり続けたら本当にゲームオーバー
+                if (gameOverGraceTimer > 90) {
+                    gameOver = true;
+                }
+            } else {
+                // 線から下がればタイマーリセット
+                gameOverGraceTimer = 0;
+            }
+        }
         function drawBackgroundDecor() { ctx.fillStyle = "rgba(255,255,255,0.25)"; for (let i = 0; i < 16; i++) { ctx.beginPath(); ctx.arc(60 + (i%8) * 90 + (i>=8?ENEMY_OFFSET:0), 80 + (i % 2) * 40, 30, 0, Math.PI * 2); ctx.fill(); } }
         function drawField() { ctx.fillStyle = "#fffdf4"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT); }
         function drawLine() { ctx.strokeStyle = "#ff7b7b"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(FIELD_X, lineY); ctx.lineTo(FIELD_X + FIELD_WIDTH, lineY); ctx.stroke(); }
@@ -592,3 +621,4 @@
     </script>
 </body>
 </html>
+
