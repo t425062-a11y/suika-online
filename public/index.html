@@ -312,11 +312,14 @@
         let visionBlurTimer = 0;   let maxVisionBlur = 180;
         let lockInputTimer = 0;    let maxLockInput = 120;
 
-        // 【追加】演出エフェクト用変数
+        // 演出エフェクト用変数
         let cutInTimer = 0;
         let cutInLevel = 0;
         let cutInType = "MY_SKILL"; // "MY_SKILL" または "ENEMY_SKILL"
-        let shakeTimer = 0; // 画面の揺れ残りフレーム
+        let shakeTimer = 0; 
+
+        // 【新機能】敵フィールド描画用の独自ウニ落下アニメーション管理配列
+        let enemyOjamaVisuals = [];
 
         const radiuses = [0, 22, 30, 40, 52, 66, 82, 100, 122, 148, 178, 212];
         const colors = ["#ddd", "#ff9aa2", "#ffd97d", "#f9f871", "#8fd3ff", "#98f5a5", "#caa6ff", "#ff9de1", "#6fdd8b", "#ffb86b", "#7dd3fc", "#f472b6"];
@@ -345,23 +348,27 @@
         // スキル発動時の相手側への通信送信
         function activateSkill(level) {
             if (level === 6 || level === 8 || level === 10 || level === 11) {
-                // 自分がスキルを発動したカットインをセット
                 cutInTimer = 60;
                 cutInLevel = level;
                 cutInType = "MY_SKILL";
             }
 
-            if (level === 8) { // カメ: 視界ブレ
+            if (level === 8) { 
                 socket.emit("triggerSkill", { type: "blur", duration: 180, level: 8 });
             }
-            if (level === 6) { // イルカ: ウニ1個送る
-                socket.emit("triggerSkill", { type: "penalty", count: 1, level: 6 });
+            if (level === 6) { 
+                socket.emit("triggerSkill", { type: "penalty", count: 1, level: 6, relativeX: Math.random() });
+                // 【追加】自分の右側画面（敵のフィールド）に、今からウニが落ちる軌跡を描くための演出オブジェクトを即時生成
+                enemyOjamaVisuals.push({ relX: Math.random(), currentY: -20, targetY: 120, speed: 6, timer: 45 });
             }
-            if (level === 10) { // シャチ: 操作ロック
+            if (level === 10) { 
                 socket.emit("triggerSkill", { type: "lock", duration: 120, level: 10 });
             }
-            if (level === 11) { // クジラ: ウニ4個送る
-                socket.emit("triggerSkill", { type: "penalty", count: 4, level: 11 });
+            if (level === 11) { 
+                socket.emit("triggerSkill", { type: "penalty", count: 4, level: 11, relativeX: Math.random() });
+                for(let i=0; i<4; i++) {
+                    enemyOjamaVisuals.push({ relX: Math.random(), currentY: -20 - (i*25), targetY: 120, speed: 6, timer: 55 });
+                }
             }
         }
 
@@ -369,7 +376,6 @@
         socket.on("receiveSkill", (skill) => {
             if (!isInGameMode || gameOver || matchResult) return;
             
-            // 相手にスキルを使われたカットインをセット
             cutInTimer = 60;
             cutInLevel = skill.level || 6;
             cutInType = "ENEMY_SKILL";
@@ -437,7 +443,7 @@
         function resetOwnGame() {
             balls = []; score = 0; gameOver = false; matchResult = null; nextLevel = randomLevel();
             currentX = FIELD_X + FIELD_WIDTH / 2; lastDropX = -9999; samePlaceCount = 0; enemyState = null; isEnemyConnectedOnce = false;
-            visionBlurTimer = 0; lockInputTimer = 0; cutInTimer = 0; shakeTimer = 0; backToLobbyBtn.style.display = "none";
+            visionBlurTimer = 0; lockInputTimer = 0; cutInTimer = 0; shakeTimer = 0; enemyOjamaVisuals = []; backToLobbyBtn.style.display = "none";
         }
         function randomLevel() { const r = Math.random(); if (r < 0.40) return 1; if (r < 0.75) return 2; if (r < 0.95) return 3; return 4; }
         
@@ -454,7 +460,7 @@
             if (lockInputTimer > 0) return;
 
             const radius = radiuses[nextLevel]; let spawnX = currentX;
-            if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_X + FIELD_WIDTH - radius;
+            if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_WIDTH - radius;
             
             if (Math.abs(spawnX - lastDropX) < 30) { samePlaceCount++; } else { samePlaceCount = 0; }
             lastDropX = spawnX;
@@ -525,7 +531,6 @@
             if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
             ctx.restore();
             
-            // 目くらましエフェクト
             if (visionBlurTimer > 0) {
                 ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
                 ctx.fillStyle = "rgba(0,180,216,0.15)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -533,15 +538,12 @@
             ctx.globalAlpha = 1;
         }
 
-        // 【機能強化】タイマーの視覚的なゲージ化
         function drawTimers() {
             let startY = 340;
             if (visionBlurTimer > 0) {
                 ctx.fillStyle = "#6b4f3f"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "left";
                 ctx.fillText("🔮 視界異常", 20, startY);
-                // ゲージ背景
                 ctx.fillStyle = "#e0e0e0"; ctx.fillRect(20, startY + 8, 140, 10);
-                // ゲージ残量
                 const ratio = visionBlurTimer / maxVisionBlur;
                 ctx.fillStyle = "#0288d1"; ctx.fillRect(20, startY + 8, 140 * ratio, 10);
                 startY += 40;
@@ -549,9 +551,7 @@
             if (lockInputTimer > 0) {
                 ctx.fillStyle = "#ff5252"; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "left";
                 ctx.fillText("🔒 操作不能", 20, startY);
-                // ゲージ背景
                 ctx.fillStyle = "#e0e0e0"; ctx.fillRect(20, startY + 8, 140, 10);
-                // ゲージ残量
                 const ratio = lockInputTimer / maxLockInput;
                 ctx.fillStyle = "#ff1744"; ctx.fillRect(20, startY + 8, 140 * ratio, 10);
             }
@@ -560,7 +560,24 @@
         // 送信用・同期用データ生成
         function serializeState() { return { score, gameOver, nextLevel, visionBlurTimer, lockInputTimer, cutInTimer, cutInLevel, cutInType, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
         function sendGameState() { if (!isInGameMode) return; const now = performance.now(); if (now - lastStateSentAt < STATE_SEND_INTERVAL) return; lastStateSentAt = now; socket.emit("gameState", serializeState()); }
-        socket.on("enemyState", data => { if (!isInGameMode) return; enemyState = data; requestAnimationFrame(() => checkMatchResult()); });
+        
+        // 相手側から状態を受信
+        socket.on("enemyState", data => { 
+            if (!isInGameMode) return; 
+            
+            // 【機能強化】相手側のウニの総数が「前回の同期より増えていた」かつ、まだ自分が落下アニメを積んでいない場合
+            if (enemyState && data.balls) {
+                const prevObstacles = enemyState.balls.filter(b => b.isObstacle).length;
+                const newObstacles = data.balls.filter(b => b.isObstacle).length;
+                // 相手に直接ウニが湧き、こちらの落下予告演出がまだ少なければ補填（相手がオジャマを落とした場合など）
+                if (newObstacles > prevObstacles && enemyOjamaVisuals.length < (newObstacles - prevObstacles)) {
+                    enemyOjamaVisuals.push({ relX: Math.random(), currentY: -10, targetY: 120, speed: 7, timer: 45 });
+                }
+            }
+            
+            enemyState = data; 
+            requestAnimationFrame(() => checkMatchResult()); 
+        });
 
         function checkMatchResult() {
             if (matchResult || !enemyState) return;
@@ -578,6 +595,7 @@
             ctx.fillStyle = "#6b4f3f"; ctx.font = "24px sans-serif"; ctx.textAlign = "left"; ctx.fillText("ENEMY", ENEMY_OFFSET + 35, 50); ctx.font = "32px sans-serif"; ctx.fillText(enemyState ? (enemyState.score || 0) : 0, ENEMY_OFFSET + 35, 88);
             if (!enemyState) { ctx.fillStyle = "#6b4f3f"; ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.fillText("WAITING", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); return; }
             
+            // 敵の固定オブジェクトを描画
             for (const ball of enemyState.balls || []) {
                 const radius = radiuses[ball.level] || 10; const x = eFieldX + (ball.x - FIELD_X); const y = ball.y;
                 const img = ball.isObstacle ? obstacleImage : seaImages[ball.level];
@@ -593,6 +611,43 @@
                 ctx.restore();
             }
 
+            // 【新機能】敵フィールド用のリアルタイムウニ落下アニメーションと警告ラインの重ね描き
+            for (let i = enemyOjamaVisuals.length - 1; i >= 0; i--) {
+                const vis = enemyOjamaVisuals[i];
+                const uniX = eFieldX + (FIELD_WIDTH * vis.relX);
+                
+                // 1. 赤い縦の落下警告ライン
+                ctx.save();
+                ctx.strokeStyle = "rgba(255, 23, 68, 0.35)";
+                ctx.lineWidth = 3;
+                ctx.setLineDash([6, 6]);
+                ctx.beginPath(); ctx.moveTo(uniX, 0); ctx.lineTo(uniX, HEIGHT); ctx.stroke();
+                ctx.restore();
+
+                // 2. 落下するウニ本体
+                const radius = 35; // オジャマウニ専用のわかりやすい中型サイズ
+                ctx.save();
+                if (obstacleImage.complete && obstacleImage.naturalWidth > 0) {
+                    ctx.beginPath(); ctx.arc(uniX, vis.currentY, radius, 0, Math.PI * 2); ctx.clip();
+                    ctx.drawImage(obstacleImage, uniX - radius, vis.currentY - radius, radius * 2, radius * 2);
+                } else {
+                    ctx.beginPath(); ctx.fillStyle = "#ff1744";
+                    ctx.arc(uniX, vis.currentY, radius, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+
+                // 警告マーク「！」をウニの上空に表示
+                ctx.fillStyle = "#ff1744"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("⚠️", uniX, Math.max(25, vis.currentY - 45));
+
+                // アニメーション更新
+                vis.currentY += vis.speed;
+                vis.timer--;
+                if (vis.timer <= 0 || vis.currentY > HEIGHT) {
+                    enemyOjamaVisuals.splice(i, 1); // アニメーション終了後に消去
+                }
+            }
+
             if (enemyState.visionBlurTimer > 0) {
                 ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT);
             }
@@ -600,34 +655,29 @@
             if (enemyState.gameOver) { ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(eFieldX, 0, FIELD_WIDTH, HEIGHT); ctx.fillStyle = "white"; ctx.font = "50px sans-serif"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", eFieldX + FIELD_WIDTH / 2, HEIGHT / 2); }
         }
 
-        // 【追加】スキル発動の巨大カットインエフェクト描画
+        // スキル発動の巨大カットインエフェクト描画
         function drawCutInEffect() {
-            // 自分のカットイン、または同期された相手のカットイン
             let currentTimer = cutInTimer;
             let currentLevel = cutInLevel;
             let currentType = cutInType;
 
-            // 自分が発動していなくて、相手が発動中の場合は相手の演出を画面に出す
             if (currentTimer <= 0 && enemyState && enemyState.cutInTimer > 0) {
                 currentTimer = enemyState.cutInTimer;
                 currentLevel = enemyState.cutInLevel;
-                currentType = enemyState.cutInType === "MY_SKILL" ? "ENEMY_SKILL" : "MY_SKILL"; // 相手の"MY"は自分にとって"ENEMY"
+                currentType = enemyState.cutInType === "MY_SKILL" ? "ENEMY_SKILL" : "MY_SKILL";
             }
 
             if (currentTimer <= 0) return;
 
             ctx.save();
-            // 背景帯マスク
             ctx.fillStyle = currentType === "MY_SKILL" ? "rgba(0, 180, 216, 0.85)" : "rgba(230, 57, 70, 0.9)";
             ctx.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
 
-            // 中央区切り枠
             ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 6;
             ctx.beginPath(); ctx.moveTo(0, HEIGHT / 2 - 80); ctx.lineTo(WIDTH, HEIGHT / 2 - 80);
             ctx.moveTo(0, HEIGHT / 2 + 80); ctx.lineTo(WIDTH, HEIGHT / 2 + 80);
             ctx.stroke();
 
-            // スキル名テキストの判別
             let skillName = "💥 ATTACK!";
             if (currentLevel === 6) skillName = "🐬 イルカ・ストライク (ウニ+1)";
             if (currentLevel === 8) skillName = "🐢 カメ・カモフラージュ (視界ブレ)";
@@ -649,7 +699,6 @@
                 ctx.fillText(skillName, WIDTH * 0.75, HEIGHT / 2 + 30);
             }
 
-            // キャラクターイラストの拡大中央描画
             const img = seaImages[currentLevel];
             if (img && img.complete && img.naturalWidth > 0) {
                 const targetX = currentType === "MY_SKILL" ? WIDTH * 0.25 + 280 : WIDTH * 0.75 - 280;
@@ -681,7 +730,6 @@
             if (!isInGameMode) return; 
             
             ctx.save();
-            // 【機能強化】スクリーンシェイク（画面の揺れ）処理
             if (shakeTimer > 0) {
                 const dx = (Math.random() - 0.5) * 10;
                 const dy = (Math.random() - 0.5) * 10;
@@ -695,7 +743,6 @@
             drawTimers();
             for (const ball of balls) ball.draw();
 
-            // カットイン演出は最前面に重ねる
             drawCutInEffect();
 
             if (matchResult) {
