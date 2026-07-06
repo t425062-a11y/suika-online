@@ -9,13 +9,11 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// 部屋ごとの接続状態を管理
 const rooms = {};
 
 io.on("connection", (socket) => {
     let currentRoom = null;
 
-    // 定期的にロビーへ部屋リストを配る
     function broadcastRoomList() {
         const list = Object.keys(rooms).map(roomId => ({
             id: roomId,
@@ -24,14 +22,11 @@ io.on("connection", (socket) => {
         io.emit("roomList", list);
     }
 
-    // 最初の一歩として部屋リストを送る
     broadcastRoomList();
 
-    // 部屋に入る
     socket.on("joinRoom", (roomId) => {
         if (!roomId) roomId = "default";
         
-        // 以前の部屋があれば抜ける
         if (currentRoom && rooms[currentRoom]) {
             rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
             if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
@@ -42,29 +37,27 @@ io.on("connection", (socket) => {
         socket.join(roomId);
 
         if (!rooms[roomId]) rooms[roomId] = [];
-        // 1つの部屋は最大2人まで
         if (rooms[roomId].length < 2) {
             rooms[roomId].push(socket.id);
         }
 
+        // 自分のSocket IDをクライアントに教えてあげる
+        socket.emit("yourSocketId", socket.id);
         broadcastRoomList();
     });
 
-    // ゲーム状態の同期（位置やスコア）
     socket.on("gameState", (state) => {
         if (!currentRoom) return;
-        // 自分以外の部屋のメンバーに状態を転送
         socket.to(currentRoom).emit("enemyState", state);
     });
 
-    // 【最重要】スキル発動の仲介（ここが動いていなかった！）
+    // 【通信強化】部屋の全員に送信し、送信元のIDを添付する
     socket.on("triggerSkill", (skillData) => {
         if (!currentRoom) return;
-        // スキルを発動した人「以外」の、同じ部屋の対戦相手にそのままスキルを叩き込む
-        socket.to(currentRoom).emit("receiveSkill", skillData);
+        skillData.senderId = socket.id; // 誰が撃ったスキルか記録
+        io.to(currentRoom).emit("receiveSkill", skillData);
     });
 
-    // 部屋を自発的に抜ける
     socket.on("leaveRoom", () => {
         if (currentRoom && rooms[currentRoom]) {
             rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
@@ -75,7 +68,6 @@ io.on("connection", (socket) => {
         broadcastRoomList();
     });
 
-    // 切断時
     socket.on("disconnect", () => {
         if (currentRoom && rooms[currentRoom]) {
             rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
