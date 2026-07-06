@@ -155,6 +155,9 @@
 
         #game-screen {
             display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
         }
 
         canvas {
@@ -165,6 +168,24 @@
             border-radius: 18px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
+
+        /* 👑 追加：ロビーに戻るボタンのスタイル */
+        .back-to-lobby-btn {
+            background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(38, 166, 154, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+            .back-to-lobby-btn:hover {
+                transform: scale(1.05);
+            }
     </style>
 </head>
 <body>
@@ -183,6 +204,7 @@
 
     <div id="game-screen">
         <canvas id="gameCanvas" width="1440" height="820"></canvas>
+        <button id="backToLobbyBtn" class="back-to-lobby-btn" type="button" style="display: none;">ロビーに戻る</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -195,6 +217,7 @@
         const joinButton = document.getElementById("joinButton");
         const quickMatchBtn = document.getElementById("quickMatchBtn");
         const roomListEl = document.getElementById("roomList");
+        const backToLobbyBtn = document.getElementById("backToLobbyBtn"); // 👑 追加
 
         let activeRoomsRawList = [];
         let isInGameMode = false;
@@ -205,10 +228,21 @@
             socket.emit("joinRoom", myRoomId);
 
             lobbyScreen.style.display = "none";
-            gameScreen.style.display = "block";
+            gameScreen.style.display = "flex"; // 👑 変更：縦並びにするため flex に
 
             resetOwnGame();
         }
+
+        // 👑 追加：ロビーに戻るボタンのクリックイベント
+        backToLobbyBtn.addEventListener("click", () => {
+            // サーバー側に退出を伝える（サーバー側の実装に合わせて必要に応じて）
+            socket.emit("leaveRoom", myRoomId);
+
+            isInGameMode = false;
+            lobbyScreen.style.display = "flex";
+            gameScreen.style.display = "none";
+            backToLobbyBtn.style.display = "none";
+        });
 
         joinButton.addEventListener("click", () => {
             const targetRoom = roomInput.value.trim() || "default";
@@ -429,6 +463,7 @@
             samePlaceCount = 0;
             enemyState = null;
             isEnemyConnectedOnce = false;
+            backToLobbyBtn.style.display = "none"; // 👑 追加：リセット時にボタンを隠す
         }
 
         function randomLevel() {
@@ -693,7 +728,6 @@
             // 👑 あなたが生きていて、相手がゲームオーバーになった時
             if (!gameOver && enemyState.gameOver) {
                 matchResult = "WIN";
-                // 🚨 ここで gameOver = true にしなように修正！
                 return;
             }
 
@@ -854,6 +888,9 @@
                 ctx.fillStyle = matchResult === "WIN" ? "#ffd97d" : matchResult === "LOSE" ? "#ff9aa2" : "#ffffff";
                 ctx.font = "bold 60px sans-serif";
                 ctx.fillText(resultText, FIELD_X + FIELD_WIDTH / 2, HEIGHT / 2);
+
+                // 👑 追加：勝敗が決まったらボタンを表示
+                backToLobbyBtn.style.display = "block";
             }
             // 👑 勝敗が決まっていない純粋な自分のゲームオーバー（相手待ち状態）の時だけ帯を出す
             else if (gameOver) {
