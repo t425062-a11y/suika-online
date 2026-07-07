@@ -374,10 +374,28 @@
         }
 
         let balls = []; let currentX = FIELD_X + FIELD_WIDTH / 2; let nextLevel = randomLevel();
+        // 手元のフルーツを管理する変数を追加
+        let currentHandLevel = 1;
+
         function resetOwnGame() {
-            balls = []; score = 0; gameOver = false; matchResult = null; nextLevel = randomLevel();
-            currentX = FIELD_X + FIELD_WIDTH / 2; lastDropX = -9999; samePlaceCount = 0; enemyState = null; isEnemyConnectedOnce = false;
-            visionBlurTimer = 0; lockInputTimer = 0; cutInTimer = 0; shakeTimer = 0; enemyOjamaVisuals = []; backToLobbyBtn.style.display = "none";
+            balls = []; 
+            score = 0; 
+            gameOver = false; 
+            matchResult = null; 
+            // スタート時に「手元」と「NEXT」をそれぞれ別々に抽選する
+            currentHandLevel = randomLevel();
+            nextLevel = randomLevel();
+            currentX = FIELD_X + FIELD_WIDTH / 2; 
+            lastDropX = -9999; 
+            samePlaceCount = 0; 
+            enemyState = null; 
+            isEnemyConnectedOnce = false;
+            visionBlurTimer = 0; 
+            lockInputTimer = 0; 
+            cutInTimer = 0; 
+            shakeTimer = 0; 
+            enemyOjamaVisuals = []; 
+            backToLobbyBtn.style.display = "none";
         }
         function randomLevel() { const r = Math.random(); if (r < 0.40) return 1; if (r < 0.75) return 2; if (r < 0.95) return 3; return 4; }
         
@@ -487,10 +505,10 @@
 
         function drawDropPreview() {
             if (lockInputTimer > 0) return;
-            // 予備表示の時点では、次に落とす予定のフルーツ（nextLevel）の見た目を出す`n        const r = radiuses[nextLevel]; const img = seaImages[nextLevel];
+            const r = radiuses[currentHandLevel]; const img = seaImages[currentHandLevel];
             const useImage = img && img.complete && img.naturalWidth > 0;
             ctx.save(); ctx.globalAlpha = 0.3;
-            if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
+            if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[currentHandLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
             ctx.restore();
             if (visionBlurTimer > 0) {
                 ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -513,7 +531,7 @@
             }
         }
 
-        function serializeState() { return { score, gameOver, nextLevel, visionBlurTimer, lockInputTimer, cutInTimer, cutInLevel, cutInType, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
+        function serializeState() { return { score, gameOver, nextLevel, currentHandLevel, visionBlurTimer, lockInputTimer, cutInTimer, cutInLevel, cutInType, balls: balls.map(b => ({ x: b.x, y: b.y, level: b.level, isObstacle: b.isObstacle })) }; }
         function sendGameState() { if (!isInGameMode) return; const now = performance.now(); if (now - lastStateSentAt < STATE_SEND_INTERVAL) return; lastStateSentAt = now; socket.emit("gameState", serializeState()); }
         socket.on("enemyState", data => { if (!isInGameMode) return; enemyState = data; requestAnimationFrame(() => checkMatchResult()); });
 
@@ -630,6 +648,7 @@
     </script>
 </body>
 </html>
+
 
 
 
