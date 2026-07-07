@@ -390,7 +390,10 @@
 
         function dropCurrentBall() {
             unlockAudio(); if (gameOver || matchResult || !isMatched()) return; if (lockInputTimer > 0) return;
-            const radius = radiuses[nextLevel]; let spawnX = currentX;
+            
+            // 1. まず、今セットされている 'nextLevel' を「今落とすフルーツのレベル」として変数に固定する
+            const currentLevel = nextLevel;
+            const radius = radiuses[currentLevel]; let spawnX = currentX;
             if (spawnX < FIELD_X + radius) spawnX = FIELD_X + radius; if (spawnX > FIELD_X + FIELD_WIDTH - radius) spawnX = FIELD_X + FIELD_WIDTH - radius;
             if (Math.abs(spawnX - lastDropX) < 30) { samePlaceCount++; } else { samePlaceCount = 0; }
             lastDropX = spawnX;
@@ -399,10 +402,16 @@
                 const obstacleLevel = randomLevel(); const obstacleRadius = radiuses[obstacleLevel];
                 const randomX = FIELD_X + obstacleRadius + Math.random() * (FIELD_WIDTH - obstacleRadius * 2);
                 const ojama = new Ball(randomX, 50, obstacleLevel); ojama.isObstacle = true; balls.push(ojama); samePlaceCount = 0;
+                
+                // ペナルティの時も、手元のフルーツを消費した扱いにするためにNEXTを新しく抽選
+                nextLevel = randomLevel();
             } else {
-                const ball = new Ball(spawnX, 50, nextLevel); balls.push(ball);
+                // 2. 固定したレベルでフルーツを落とす
+                const ball = new Ball(spawnX, 50, currentLevel); balls.push(ball);
+                
+                // 3. 落とし終わった後に、未来のフルーツ（本当のNEXT）を新しく抽選する
+                nextLevel = randomLevel();
             }
-            nextLevel = randomLevel();
         }
 
         function collide(a, b) { const dx = b.x - a.x; const dy = b.y - a.y; const dist = Math.sqrt(dx * dx + dy * dy); return dist < (a.radius + b.radius) * 1.08; }
@@ -478,7 +487,7 @@
 
         function drawDropPreview() {
             if (lockInputTimer > 0) return;
-            const r = radiuses[nextLevel]; const img = seaImages[nextLevel];
+            // 予備表示の時点では、次に落とす予定のフルーツ（nextLevel）の見た目を出す`n        const r = radiuses[nextLevel]; const img = seaImages[nextLevel];
             const useImage = img && img.complete && img.naturalWidth > 0;
             ctx.save(); ctx.globalAlpha = 0.3;
             if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[nextLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
@@ -621,5 +630,6 @@
     </script>
 </body>
 </html>
+
 
 
