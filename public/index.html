@@ -503,17 +503,17 @@
             if (useImage) { ctx.beginPath(); ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 2; ctx.arc(90, 245, r, 0, Math.PI * 2); ctx.stroke(); }
         }
 
-        function drawDropPreview() {
+                function drawDropPreview() {
             if (lockInputTimer > 0) return;
             
-            // 確実に「自分の今の操作キャラクター（currentHandLevel）」の半径と画像をリアルタイムに取得
-            const currentLevelForPreview = currentHandLevel;
-            const r = radiuses[currentLevelForPreview]; 
-            const img = seaImages[currentLevelForPreview];
+            // 【超重要】今手元にある本物のレベル（currentHandLevel）を毎フレーム100%強制同期
+            const targetLvl = (typeof currentHandLevel !== 'undefined') ? currentHandLevel : 1;
+            const r = radiuses[targetLvl] || 22; 
+            const img = seaImages[targetLvl];
             const useImage = img && img.complete && img.naturalWidth > 0;
             
             ctx.save(); 
-            ctx.globalAlpha = 0.3; // うっすら透過
+            ctx.globalAlpha = 0.3; // うっすら透明
             
             if (useImage) { 
                 ctx.beginPath(); 
@@ -522,7 +522,7 @@
                 ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); 
             } else { 
                 ctx.beginPath(); 
-                ctx.fillStyle = colors[currentLevelForPreview] || "#ddd"; 
+                ctx.fillStyle = colors[targetLvl] || "#ff9aa2"; 
                 ctx.arc(currentX, 50, r, 0, Math.PI * 2); 
                 ctx.fill(); 
             }
@@ -666,6 +666,7 @@
     </script>
 </body>
 </html>
+
 
 
 
