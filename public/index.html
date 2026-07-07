@@ -505,11 +505,29 @@
 
         function drawDropPreview() {
             if (lockInputTimer > 0) return;
-            const r = radiuses[currentHandLevel]; const img = seaImages[currentHandLevel];
+            
+            // 確実に「自分の今の操作キャラクター（currentHandLevel）」の半径と画像をリアルタイムに取得
+            const currentLevelForPreview = currentHandLevel;
+            const r = radiuses[currentLevelForPreview]; 
+            const img = seaImages[currentLevelForPreview];
             const useImage = img && img.complete && img.naturalWidth > 0;
-            ctx.save(); ctx.globalAlpha = 0.3;
-            if (useImage) { ctx.beginPath(); ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); } else { ctx.beginPath(); ctx.fillStyle = colors[currentHandLevel]; ctx.arc(currentX, 50, r, 0, Math.PI * 2); ctx.fill(); }
+            
+            ctx.save(); 
+            ctx.globalAlpha = 0.3; // うっすら透過
+            
+            if (useImage) { 
+                ctx.beginPath(); 
+                ctx.arc(currentX, 50, r, 0, Math.PI * 2); 
+                ctx.clip(); 
+                ctx.drawImage(img, currentX - r, 50 - r, r * 2, r * 2); 
+            } else { 
+                ctx.beginPath(); 
+                ctx.fillStyle = colors[currentLevelForPreview] || "#ddd"; 
+                ctx.arc(currentX, 50, r, 0, Math.PI * 2); 
+                ctx.fill(); 
+            }
             ctx.restore();
+            
             if (visionBlurTimer > 0) {
                 ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
                 ctx.fillStyle = "rgba(0,180,216,0.15)"; ctx.fillRect(FIELD_X, 0, FIELD_WIDTH, HEIGHT);
@@ -648,6 +666,7 @@
     </script>
 </body>
 </html>
+
 
 
 
