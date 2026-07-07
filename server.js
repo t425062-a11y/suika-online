@@ -9,75 +9,64 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
 
-const rooms = {};
+let rooms = {}; 
+
+function getRoomList() {
+    let list = [];
+    for (let rId in rooms) {
+        list.push({ id: rId, count: rooms[rId].length });
+    }
+    return list;
+}
 
 io.on("connection", (socket) => {
-    let currentRoom = null;
+    let room = null;
 
-    function broadcastRoomList() {
-        const list = Object.keys(rooms).map(roomId => ({
-            id: roomId,
-            count: rooms[roomId].length
-        }));
-        io.emit("roomList", list);
-    }
+    socket.emit("roomList", getRoomList());
 
-    broadcastRoomList();
-
-    socket.on("joinRoom", (roomId) => {
-        if (!roomId) roomId = "default";
-        
-        if (currentRoom && rooms[currentRoom]) {
-            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
-            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
-            socket.leave(currentRoom);
+    socket.on("joinRoom", (roomName) => {
+        room = roomName;
+        socket.join(room);
+        if (!rooms[room]) rooms[room] = [];
+        if (rooms[room].length < 2) {
+            rooms[room].push(socket.id);
         }
-
-        currentRoom = roomId;
-        socket.join(roomId);
-
-        if (!rooms[roomId]) rooms[roomId] = [];
-        if (rooms[roomId].length < 2) {
-            rooms[roomId].push(socket.id);
-        }
-
-        // 自分のSocket IDをクライアントに教えてあげる
-        socket.emit("yourSocketId", socket.id);
-        broadcastRoomList();
+        io.emit("roomList", getRoomList());
     });
 
     socket.on("gameState", (state) => {
-        if (!currentRoom) return;
-        socket.to(currentRoom).emit("enemyState", state);
+        if (room) {
+            socket.broadcast.to(room).emit("enemyState", state);
+        }
     });
 
-    // 【通信強化】部屋の全員に送信し、送信元のIDを添付する
-        socket.on("triggerSkill", (data) => {
-        // io.to(room).emit ではなく、自分以外の相手だけに送る（broadcast.to）
-        socket.broadcast.to(room).emit("receiveSkill", data);
+    // 【重要】スキルを自分以外の相手（broadcast）だけに確実に届ける処理
+    socket.on("triggerSkill", (data) => {
+        if (room) {
+            socket.broadcast.to(room).emit("receiveSkill", data);
+        }
     });
 
     socket.on("leaveRoom", () => {
-        if (currentRoom && rooms[currentRoom]) {
-            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
-            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
-            socket.leave(currentRoom);
-            currentRoom = null;
+        if (room && rooms[room]) {
+            rooms[room] = rooms[room].filter(id => id !== socket.id);
+            if (rooms[room].length === 0) delete rooms[room];
+            socket.leave(room);
         }
-        broadcastRoomList();
+        io.emit("roomList", getRoomList());
+        room = null;
     });
 
     socket.on("disconnect", () => {
-        if (currentRoom && rooms[currentRoom]) {
-            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
-            if (rooms[currentRoom].length === 0) delete rooms[currentRoom];
+        if (room && rooms[room]) {
+            rooms[room] = rooms[room].filter(id => id !== socket.id);
+            if (rooms[room].length === 0) delete rooms[room];
         }
-        broadcastRoomList();
+        io.emit("roomList", getRoomList());
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
-
