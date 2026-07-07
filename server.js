@@ -52,10 +52,9 @@ io.on("connection", (socket) => {
     });
 
     // 【通信強化】部屋の全員に送信し、送信元のIDを添付する
-    socket.on("triggerSkill", (skillData) => {
-        if (!currentRoom) return;
-        skillData.senderId = socket.id; // 誰が撃ったスキルか記録
-        io.to(currentRoom).emit("receiveSkill", skillData);
+        socket.on("triggerSkill", (data) => {
+        // io.to(room).emit ではなく、自分以外の相手だけに送る（broadcast.to）
+        socket.broadcast.to(room).emit("receiveSkill", data);
     });
 
     socket.on("leaveRoom", () => {
@@ -81,3 +80,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+

@@ -98,24 +98,22 @@
         
         function activateSkill(level) { 
             if (level !== 6 && level !== 8 && level !== 10 && level !== 11) return; 
+            
+            // 自分が発動した時は、カットイン演出（MY_SKILL）を出すだけで、自分のタイマーは増やさない！
             cutInTimer = 60; cutInLevel = level; cutInType = "MY_SKILL"; 
             const randomRelX = Math.random(); 
             
             if (level === 6) { 
                 socket.emit("triggerSkill", { type: "penalty", count: 1, level: 6, relativeX: randomRelX }); 
-                addDebugLog("送信: イルカスキル"); 
             } 
             if (level === 8) { 
                 socket.emit("triggerSkill", { type: "blur", duration: 420, level: 8 }); 
-                addDebugLog("送信: カメスキル"); 
             } 
             if (level === 10) { 
                 socket.emit("triggerSkill", { type: "lock", duration: 420, level: 10 }); 
-                addDebugLog("送信: シャチスキル"); 
             } 
             if (level === 11) { 
                 socket.emit("triggerSkill", { type: "penalty", count: 4, level: 11, relativeX: randomRelX }); 
-                addDebugLog("送信: クジラスキル"); 
             } 
         }
 
@@ -250,3 +248,4 @@
     </script>
 </body>
 </html>
+
